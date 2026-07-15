@@ -39,11 +39,18 @@ def load_data(file, columns):
     if not os.path.exists(file): return pd.DataFrame(columns=columns)
     try:
         with open(file, "r", encoding="utf-8") as f:
-            df = pd.DataFrame(json.load(f))
-            # إصلاح تلقائي: إضافة الأعمدة المفقودة إذا وُجدت
+            data = json.load(f)
+            df = pd.DataFrame(data)
+            
+            # إصلاح تلقائي: إضافة الأعمدة المفقودة وحفظ الملف فوراً
+            needs_save = False
             for col in columns:
                 if col not in df.columns:
                     df[col] = "[]" if col in ["اللقاحات", "الجرعات"] else ""
+                    needs_save = True
+            
+            if needs_save:
+                df.to_json(file, orient="records", force_ascii=False, indent=4)
             return df
     except: return pd.DataFrame(columns=columns)
 
@@ -62,37 +69,45 @@ tab1, tab2, tab3, tab4 = st.tabs(["🏠", "💉", "📋", "➕"])
 with tab1:
     st.subheader("القطيع")
     df = st.session_state.herd
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("الكل", len(df))
-    c2.metric("ذكور", len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]))
-    c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
-    c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
+    
+    # حماية من كون df فارغاً
+    if not df.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("الكل", len(df))
+        c2.metric("ذكور", len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]))
+        c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
+        c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
+    else:
+        st.write("القطيع فارغ حالياً، أضف رؤوساً جديدة من تبويب (➕).")
     
     st.divider()
-    filter_type = st.selectbox("فرز:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
-    view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
-    
-    for idx, row in view_df.iterrows():
-        with st.expander(f"🏷️ {row['القلادة']}"):
-            # التحقق من وجود الصورة قبل العرض
-            if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
-            st.write(f"الجنس: {row['الجنس']} | العمر: {row['العمر']} شهر")
+    if not df.empty:
+        filter_type = st.selectbox("فرز:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
+        view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
+        
+        for idx, row in view_df.iterrows():
+            with st.expander(f"🏷️ {row['القلادة']}"):
+                if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
+                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} شهر")
 
 with tab2:
     st.subheader("إجراء طبي")
-    selected_collars = st.multiselect("اختر الأغنام:", st.session_state.herd["القلادة"].tolist())
-    action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True)
-    tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم" else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
-    treatment = st.selectbox("العلاج:", tr_opts)
-    date = str(st.date_input("التاريخ:"))
-    img_file = st.file_uploader("صورة الإجراء (اختياري)", type=['jpg', 'png'])
-    
-    if st.button("حفظ الإجراء"):
-        img_path = save_image(img_file)
-        new_hist = pd.DataFrame([{"التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
-        st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
-        save_data(st.session_state.history, HISTORY_FILE)
-        st.success("تم الحفظ!")
+    if not st.session_state.herd.empty:
+        selected_collars = st.multiselect("اختر الأغنام:", st.session_state.herd["القلادة"].tolist())
+        action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True)
+        tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم" else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
+        treatment = st.selectbox("العلاج:", tr_opts)
+        date = str(st.date_input("التاريخ:"))
+        img_file = st.file_uploader("صورة الإجراء (اختياري)", type=['jpg', 'png'])
+        
+        if st.button("حفظ الإجراء"):
+            img_path = save_image(img_file)
+            new_hist = pd.DataFrame([{"التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
+            st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
+            save_data(st.session_state.history, HISTORY_FILE)
+            st.success("تم الحفظ!")
+    else:
+        st.warning("يجب إضافة أغنام أولاً.")
 
 with tab3:
     st.subheader("📋 السجل الطبي")
@@ -101,6 +116,8 @@ with tab3:
             st.write(f"**{row['التاريخ']}** - {row['الإجراء']} ({row['العلاج']})")
             if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=100)
             st.divider()
+    else:
+        st.write("لا يوجد إجراءات مسجلة بعد.")
 
 with tab4:
     st.subheader("إضافة رأس جديد")
@@ -122,5 +139,5 @@ with tab4:
             }])
             st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
             save_data(st.session_state.herd, DATA_FILE)
-        
-        st.rerun()
+            st.rerun()
+            
