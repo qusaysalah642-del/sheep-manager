@@ -162,6 +162,13 @@ with tab4:
             
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
+                
+                # إضافة اختيار الجنس
+                genders = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
+                current_g = sheep_row.get("الجنس", "أنثى")
+                gender_idx = genders.index(current_g) if current_g in genders else 0
+                edit_gender = st.selectbox("الجنس", genders, index=gender_idx)
+                
                 edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
                 edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
@@ -169,6 +176,7 @@ with tab4:
                 
                 if st.form_submit_button("حفظ التعديلات"):
                     st.session_state.herd.at[idx, "القلادة"] = edit_collar
+                    st.session_state.herd.at[idx, "الجنس"] = edit_gender # حفظ الجنس الجديد
                     st.session_state.herd.at[idx, "العمر"] = edit_age
                     st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
                     st.session_state.herd.at[idx, "وحدة"] = edit_unit
