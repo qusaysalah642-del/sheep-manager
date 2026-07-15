@@ -61,7 +61,6 @@ if "history" not in st.session_state:
 
 # ─── واجهة التطبيق ─────────────────────────────────────────────────────────
 st.title("🐑 Sheep Manager Pro")
-# هنا تم إرجاع الأسماء
 tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة"])
 
 with tab1:
@@ -82,8 +81,9 @@ with tab1:
         view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
         for idx, row in view_df.iterrows():
             with st.expander(f"🏷️ {row['القلادة']}"):
-                if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
-                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} شهر")
+                if row.get('صورة') and os.path.exists(row['صورة']): 
+                    st.image(row['صورة'], width=150)
+                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} شهر | الولادات: {row.get('عدد الولادات', 0)}")
 
 with tab2:
     st.subheader("إجراء طبي")
@@ -115,22 +115,77 @@ with tab3:
 
 with tab4:
     st.subheader("إدارة القطيع")
-    with st.form("add_form"):
-        collar = st.text_input("القلادة")
-        gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
-        age_unit = st.radio("وحدة العمر:", ["أشهر", "سنوات"], horizontal=True)
-        age_val = st.number_input("قيمة العمر:", 0)
-        actual_age = age_val * 12 if age_unit == "سنوات" else age_val
-        births = st.number_input("الولادات", 0)
-        img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
-        if st.form_submit_button("إضافة"):
-            img_path = save_image(img_file)
-            new_row = pd.DataFrame([{
-                "ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, 
-                "العمر": actual_age, "عدد الولادات": births, "صورة": img_path,
-                "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": ""
-            }])
-            st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
-            save_data(st.session_state.herd, DATA_FILE)
-            st.rerun()
+    
+    # ── القسم الأول: إضافة رأس جديد ──
+    with st.expander("➕ إضافة رأس جديد للقطيع", expanded=True):
+        with st.form("add_form"):
+            collar = st.text_input("القلادة")
+            gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
+            age_unit = st.radio("وحدة العمر عند الإضافة:", ["أشهر", "سنوات"], horizontal=True)
+            age_val = st.number_input("قيمة العمر:", 0)
+            actual_age = age_val * 12 if age_unit == "سنوات" else age_val
+            births = st.number_input("الولادات", 0)
+            img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
+            if st.form_submit_button("إضافة"):
+                img_path = save_image(img_file)
+                new_row = pd.DataFrame([{
+                    "ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, 
+                    "العمر": actual_age, "عدد الولادات": births, "صورة": img_path,
+                    "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": ""
+                }])
+                st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
+                save_data(st.session_state.herd, DATA_FILE)
+                st.success("تمت الإضافة بنجاح!")
+                st.rerun()
+
+    # ── القسم الثاني: تعديل بيانات رأس موجود ──
+    if not st.session_state.herd.empty:
+        with st.expander("✏️ تعديل بيانات رأس موجود"):
+            selected_edit_collar = st.selectbox("اختر القلادة المراد تعديلها:", st.session_state.herd["القلادة"].tolist(), key="edit_select")
             
+            # جلب البيانات الحالية للرأس المختار
+            sheep_row = st.session_state.herd[st.session_state.herd["القلادة"] == selected_edit_collar].iloc[0]
+            
+            with st.form("edit_form"):
+                edit_collar = st.text_input("القلادة الجديدة", value=sheep_row["القلادة"])
+                genders = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
+                gender_idx = genders.index(sheep_row["الجنس"]) if sheep_row["الجنس"] in genders else 0
+                edit_gender = st.selectbox("الجنس", genders, index=gender_idx)
+                
+                edit_age_unit = st.radio("وحدة العمر الجديدة:", ["أشهر", "سنوات"], horizontal=True)
+                # عرض العمر الحالي في الإدخال
+                current_age = int(sheep_row["العمر"])
+                edit_age_val = st.number_input("قيمة العمر الجديدة:", value=current_age)
+                
+                edit_births = st.number_input("عدد الولادات الحالي", value=int(sheep_row["عدد الولادات"]))
+                edit_img_file = st.file_uploader("تحديث الصورة (اختياري)", type=['jpg', 'png'])
+                
+                if st.form_submit_button("حفظ التعديلات"):
+                    actual_age = edit_age_val * 12 if edit_age_unit == "سنوات" else edit_age_val
+                    
+                    # معالجة الصورة: إذا لم يرفع صورة جديدة، نحتفظ بالقديمة
+                    img_path = sheep_row["صورة"]
+                    if edit_img_file is not None:
+                        img_path = save_image(edit_img_file)
+                    
+                    # تحديث السطر في قاعدة البيانات
+                    idx = st.session_state.herd[st.session_state.herd["القلادة"] == selected_edit_collar].index[0]
+                    st.session_state.herd.at[idx, "القلادة"] = edit_collar
+                    st.session_state.herd.at[idx, "الجنس"] = edit_gender
+                    st.session_state.herd.at[idx, "العمر"] = actual_age
+                    st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
+                    st.session_state.herd.at[idx, "صورة"] = img_path
+                    
+                    save_data(st.session_state.herd, DATA_FILE)
+                    st.success("تم تعديل البيانات بنجاح!")
+                    st.rerun()
+
+        # ── القسم الثالث: حذف رأس من القطيع ──
+        with st.expander("🗑️ حذف رأس من القطيع"):
+            selected_del_collar = st.selectbox("اختر القلادة التي تريد حذفها نهائياً:", st.session_state.herd["القلادة"].tolist(), key="del_select")
+            if st.button("تأكيد الحذف النهائي ⚠️", type="primary"):
+                st.session_state.herd = st.session_state.herd[st.session_state.herd["القلادة"] != selected_del_collar]
+                save_data(st.session_state.herd, DATA_FILE)
+                st.success(f"تم حذف الرأس ذو القلادة '{selected_del_collar}' بنجاح!")
+                st.rerun()
+                
