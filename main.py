@@ -5,434 +5,111 @@ import os
 from datetime import datetime
 
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="نظام إدارة القطيع",
-    page_icon="🐑",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Sheep Manager Pro", layout="wide")
 
-# ─── CSS مخصص – طابع أخضر غامق ───────────────────────────────────────────────
-st.markdown("""
+# ─── الإعدادات والألوان ────────────────────────────────────────────────────────
+C_PRIMARY = "#2e7d32"
+C_BG = "#0d2818"
+
+st.markdown(f"""
 <style>
-    /* الخلفية الرئيسية */
-    .stApp {
-        background-color: #0d2818;
-        color: #c8e6c9;
-    }
-
-    /* الشريط الجانبي */
-    section[data-testid="stSidebar"] {
-        background-color: #0a2010 !important;
-        border-right: 2px solid #2e7d32;
-    }
-    section[data-testid="stSidebar"] * {
-        color: #c8e6c9 !important;
-    }
-    section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
-    section[data-testid="stSidebar"] .stTextInput input,
-    section[data-testid="stSidebar"] .stNumberInput input {
-        background-color: #1b3a2a !important;
-        border-color: #388e3c !important;
-        color: #e8f5e9 !important;
-    }
-
-    /* العناوين */
-    h1, h2, h3, h4 {
-        color: #81c784 !important;
-    }
-
-    /* بطاقات العدادات */
-    .metric-card {
-        background: linear-gradient(135deg, #1b3a2a, #0d2818);
-        border: 1px solid #2e7d32;
-        border-radius: 12px;
-        padding: 18px 22px;
-        text-align: center;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-        margin-bottom: 10px;
-    }
-    .metric-label {
-        font-size: 13px;
-        color: #a5d6a7;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        margin-bottom: 6px;
-    }
-    .metric-value {
-        font-size: 42px;
-        font-weight: 800;
-        color: #66bb6a;
-        line-height: 1;
-    }
-    .metric-value.danger { color: #ef5350; }
-    .metric-value.male   { color: #42a5f5; }
-    .metric-value.female { color: #f48fb1; }
-    .metric-value.elite  { color: #ffd54f; }
-
-    /* بطاقات الخانات */
-    .pen-card {
-        background: #122a1a;
-        border: 1px solid #388e3c;
-        border-top: 4px solid;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin-bottom: 14px;
-    }
-    .pen-quarantine  { border-top-color: #ef5350; }
-    .pen-elite       { border-top-color: #ffd54f; }
-    .pen-males       { border-top-color: #42a5f5; }
-    .pen-young       { border-top-color: #ab47bc; }
-
-    .pen-header {
-        font-size: 16px;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-    .pen-quarantine  .pen-header { color: #ef9a9a; }
-    .pen-elite       .pen-header { color: #fff176; }
-    .pen-males       .pen-header { color: #90caf9; }
-    .pen-young       .pen-header { color: #ce93d8; }
-
-    /* الجداول */
-    .stDataFrame, [data-testid="stDataFrame"] {
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .stDataFrame thead th {
-        background-color: #1b3a2a !important;
-        color: #a5d6a7 !important;
-    }
-    .stDataFrame tbody tr:nth-child(even) td {
-        background-color: #162c1e !important;
-    }
-    .stDataFrame tbody tr:hover td {
-        background-color: #1e4d2b !important;
-    }
-
-    /* أزرار */
-    .stButton > button {
-        background: linear-gradient(135deg, #2e7d32, #1b5e20);
-        color: #e8f5e9;
-        border: 1px solid #4caf50;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 15px;
-        padding: 10px 0;
-        width: 100%;
-        transition: all 0.2s;
-    }
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #388e3c, #2e7d32);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(46,125,50,0.5);
-    }
-
-    /* تذييل */
-    footer { visibility: hidden; }
-
-    /* فاصل */
-    hr { border-color: #2e7d32; opacity: 0.4; }
-
-    /* عنوان الموقع */
-    .main-title {
-        text-align: center;
-        padding: 20px 0 10px;
-        font-size: 30px;
-        font-weight: 800;
-        color: #a5d6a7;
-        letter-spacing: 1px;
-    }
-    .sub-title {
-        text-align: center;
-        color: #66bb6a;
-        font-size: 14px;
-        margin-bottom: 20px;
-    }
-
-    /* input labels */
-    .stSelectbox label, .stNumberInput label,
-    .stTextInput label, .stRadio label {
-        color: #a5d6a7 !important;
-        font-weight: 600 !important;
-    }
-
-    /* selectbox dropdown */
-    div[data-baseweb="select"] > div {
-        background-color: #1b3a2a !important;
-        border-color: #388e3c !important;
-        color: #e8f5e9 !important;
-    }
-    div[data-baseweb="select"] span {
-        color: #e8f5e9 !important;
-    }
-    div[data-baseweb="popover"] ul {
-        background-color: #1b3a2a !important;
-    }
-    div[data-baseweb="popover"] li {
-        color: #e8f5e9 !important;
-    }
-    div[data-baseweb="popover"] li:hover {
-        background-color: #2e7d32 !important;
-    }
-
-    /* number/text inputs */
-    input[type="number"], input[type="text"] {
-        background-color: #1b3a2a !important;
-        border-color: #388e3c !important;
-        color: #e8f5e9 !important;
-    }
+    .stApp {{ background-color: {C_BG}; color: #e8f5e9; }}
+    .stButton > button {{ background-color: {C_PRIMARY}; color: white; border-radius: 8px; }}
+    .metric-card {{ background: #1b3a2a; padding: 15px; border-radius: 10px; border: 1px solid #388e3c; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── إدارة الملف السحابي لحفظ البيانات ──────────────────────────────────────────
+# ─── إدارة البيانات (JSON) ──────────────────────────────────────────────────
 DATA_FILE = "herd_data.json"
 
-def load_from_file():
+def init_df():
+    return pd.DataFrame(columns=[
+        "ID", "القلادة", "الجنس", "العمر", "الحالة الصحية", 
+        "اللقاحات", "الجرعات", "آخر تغطيس"
+    ])
+
+def load_data():
     if not os.path.exists(DATA_FILE):
-        return pd.DataFrame(columns=[
-            "رقم القلادة", "الجنس", "العمر (أشهر)",
-            "عدد الولادات", "الحالة الصحية", "عدد المواليد المنتجة",
-            "تاريخ الإضافة"
-        ])
+        return init_df()
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return pd.DataFrame(data)
+            df = pd.DataFrame(data)
+            # التأكد من وجود الأعمدة الطبية
+            for col in ["اللقاحات", "الجرعات", "آخر تغطيس"]:
+                if col not in df.columns: df[col] = "[]"
+            return df
     except:
-        return pd.DataFrame(columns=[
-            "رقم القلادة", "الجنس", "العمر (أشهر)",
-            "عدد الولادات", "الحالة الصحية", "عدد المواليد المنتجة",
-            "تاريخ الإضافة"
-        ])
+        return init_df()
 
-def save_to_file(df):
-    try:
-        # تحويل الداتافريم إلى قاموس وحفظه بتنسيق JSON
-        df_dict = df.to_dict(orient="records")
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(df_dict, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        st.error(f"خطأ أثناء الحفظ: {e}")
+def save_data(df):
+    df.to_json(DATA_FILE, orient="records", force_ascii=False, indent=4)
 
-# تحميل البيانات من الملف عند الإقلاع
 if "herd" not in st.session_state:
-    st.session_state.herd = load_from_file()
+    st.session_state.herd = load_data()
 
-# ─── دالة تصنيف الرأس ────────────────────────────────────────────────────────
-def classify(row):
-    """تُرجع اسم الخانة المناسبة للرأس."""
-    if row["الحالة الصحية"] != "سليم":
-        return "عزل صحي"
-    if row["الجنس"] == "أنثى (نعجة)" and row["عدد الولادات"] >= 3:
-        return "أمهات النخبة"
-    if row["الجنس"] in ("ذكر (كبش)", "ذكر (فحل)"):
-        return "كباش وفحول"
-    return "بكاري وطليان"
+# ─── واجهة التطبيق ─────────────────────────────────────────────────────────
+st.title("🐑 Sheep Manager Pro")
 
-# ─── الشريط الجانبي – إضافة رأس جديد ────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## ➕ إضافة رأس جديد")
-    st.markdown("---")
+tab1, tab2, tab3 = st.tabs(["🏠 القطيع", "💉 السجل الصحي", "➕ إضافة/حذف"])
 
-    collar   = st.text_input("🏷️ رقم القلادة", placeholder="مثال: SH-1042")
-    gender   = st.selectbox("⚧ الجنس", [
-        "أنثى (نعجة)", "ذكر (كبش)", "ذكر (فحل)", "أنثى صغيرة (طلية)", "ذكر صغير (بكري)"
-    ])
-    age      = st.number_input("📅 العمر (بالأشهر)", min_value=0, max_value=240, value=12, step=1)
-    births   = st.number_input("🍼 عدد الولادات", min_value=0, max_value=30, value=0, step=1)
-    health   = st.selectbox("🩺 الحالة الصحية", [
-        "سليم", "مريض", "في فترة تعافي", "مشتبه به"
-    ])
-    offspring = st.number_input("🐑 عدد المواليد المنتجة", min_value=0, max_value=60, value=0, step=1)
+with tab1:
+    st.subheader("سجل القطيع")
+    st.dataframe(st.session_state.herd, use_container_width=True)
 
-    st.markdown("---")
-    if st.button("✅ إضافة إلى القطيع"):
-        if not collar.strip():
-            st.error("⚠️ يرجى إدخال رقم القلادة")
-        elif collar.strip() in st.session_state.herd["رقم القلادة"].values:
-            st.warning("⚠️ رقم القلادة موجود مسبقاً")
+with tab2:
+    st.subheader("تسجيل إجراء طبي")
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_collar = st.selectbox("اختر القلادة:", st.session_state.herd["القلادة"].tolist())
+        action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"])
+    with col2:
+        if action_type == "تطعيم":
+            treatment = st.selectbox("نوع اللقاح:", ["إيفومك", "معوي/دموي", "طاعون", "جدري", "حمى قلاعية"])
+            key_to_update = "اللقاحات"
+        elif action_type == "جرعة طفيلية":
+            treatment = st.selectbox("نوع الجرعة:", ["جرعة كبدية", "جرعة معوية"])
+            key_to_update = "الجرعات"
         else:
-            new_row = {
-                "رقم القلادة": collar.strip(),
+            treatment = "تغطيس شامل"
+            key_to_update = "آخر تغطيس"
+        
+        date = st.date_input("التاريخ:")
+
+    if st.button("حفظ الإجراء الطبي"):
+        idx = st.session_state.herd[st.session_state.herd["القلادة"] == selected_collar].index[0]
+        
+        if action_type == "تغطيس":
+            st.session_state.herd.at[idx, key_to_update] = str(date)
+        else:
+            # تحديث قائمة اللقاحات أو الجرعات
+            current_list = json.loads(st.session_state.herd.at[idx, key_to_update])
+            if treatment not in current_list:
+                current_list.append(treatment)
+            st.session_state.herd.at[idx, key_to_update] = json.dumps(current_list)
+        
+        save_data(st.session_state.herd)
+        st.success(f"تم تسجيل {action_type} للقلادة {selected_collar}")
+
+with tab3:
+    st.subheader("إضافة رأس جديد")
+    with st.form("add_animal"):
+        collar = st.text_input("رقم القلادة")
+        gender = st.selectbox("الجنس", ["أنثى (نعجة)", "ذكر (كبش)", "ذكر (فحل)", "طلية", "بكري"])
+        age = st.number_input("العمر (أشهر)", 0, 240)
+        submitted = st.form_submit_button("إضافة")
+        if submitted:
+            new_row = pd.DataFrame([{
+                "ID": str(datetime.now().timestamp()),
+                "القلادة": collar,
                 "الجنس": gender,
-                "العمر (أشهر)": int(age),
-                "عدد الولادات": int(births),
-                "الحالة الصحية": health,
-                "عدد المواليد المنتجة": int(offspring),
-                "تاريخ الإضافة": datetime.now().strftime("%Y-%m-%d %H:%M")
-            }
-            st.session_state.herd = pd.concat(
-                [st.session_state.herd, pd.DataFrame([new_row])],
-                ignore_index=True
-            )
-            # حفظ التغيير في الملف فوراً
-            save_to_file(st.session_state.herd)
-            st.success(f"✅ تمت إضافة القلادة {collar.strip()} بنجاح")
+                "العمر": age,
+                "الحالة الصحية": "سليم",
+                "اللقاحات": "[]",
+                "الجرعات": "[]",
+                "آخر تغطيس": ""
+            }])
+            st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
+            save_data(st.session_state.herd)
+         
             st.rerun()
-
-    # حذف رأس
-    if not st.session_state.herd.empty:
-        st.markdown("---")
-        st.markdown("### 🗑️ حذف رأس من القطيع")
-        collars_list = st.session_state.herd["رقم القلادة"].tolist()
-        del_collar   = st.selectbox("اختر القلادة للحذف", collars_list)
-        if st.button("❌ حذف"):
-            st.session_state.herd = st.session_state.herd[
-                st.session_state.herd["رقم القلادة"] != del_collar
-            ].reset_index(drop=True)
-            # حفظ التغيير في الملف فوراً بعد الحذف
-            save_to_file(st.session_state.herd)
-            st.success(f"تم حذف القلادة {del_collar}")
-            st.rerun()
-
-# ─── الجزء الرئيسي ───────────────────────────────────────────────────────────
-st.markdown('<div class="main-title">🐑 نظام إدارة وفرز القطيع</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">فرز ذكي تلقائي · إدارة شاملة للأغنام والمواشي</div>', unsafe_allow_html=True)
-
-df = st.session_state.herd.copy()
-
-# ─── حساب الخانات ────────────────────────────────────────────────────────────
-if not df.empty:
-    df["الخانة"] = df.apply(classify, axis=1)
-    quarantine = df[df["الخانة"] == "عزل صحي"]
-    elite      = df[df["الخانة"] == "أمهات النخبة"]
-    males      = df[df["الخانة"] == "كباش وفحول"]
-    young      = df[df["الخانة"] == "بكاري وطليان"]
-    total      = len(df)
-    male_cnt   = len(df[df["الجنس"].str.contains("ذكر")])
-    female_cnt = len(df[df["الجنس"].str.contains("أنثى")])
-    sick_cnt   = len(df[df["الحالة الصحية"] != "سليم"])
-else:
-    quarantine = elite = males = young = pd.DataFrame()
-    total = male_cnt = female_cnt = sick_cnt = 0
-
-# ─── العدادات الذكية ─────────────────────────────────────────────────────────
-st.markdown("### 📊 العدادات الذكية")
-c1, c2, c3, c4, c5 = st.columns(5)
-
-with c1:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">إجمالي الحلال</div>
-        <div class="metric-value">{total}</div>
-    </div>""", unsafe_allow_html=True)
-
-with c2:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">الذكور</div>
-        <div class="metric-value male">{male_cnt}</div>
-    </div>""", unsafe_allow_html=True)
-
-with c3:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">الإناث</div>
-        <div class="metric-value female">{female_cnt}</div>
-    </div>""", unsafe_allow_html=True)
-
-with c4:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">الحالات المرضية</div>
-        <div class="metric-value danger">{sick_cnt}</div>
-    </div>""", unsafe_allow_html=True)
-
-with c5:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">أمهات النخبة</div>
-        <div class="metric-value elite">{len(elite)}</div>
-    </div>""", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ─── الخانات الأربعة ─────────────────────────────────────────────────────────
-st.markdown("### 🏠 الخانات الأربعة – الفرز التلقائي")
-
-col_a, col_b = st.columns(2)
-
-# ── خانة 1: عزل صحي ──────────────────────────────────────────────────────────
-with col_a:
-    st.markdown(f"""
-    <div class="pen-card pen-quarantine">
-        <div class="pen-header">🔴 خانة العزل الصحي &nbsp;·&nbsp; {len(quarantine)} رأس</div>
-    </div>""", unsafe_allow_html=True)
-    if quarantine.empty:
-        st.info("لا توجد حالات عزل صحي حالياً ✅")
-    else:
-        st.dataframe(
-            quarantine.drop(columns=["الخانة"]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-# ── خانة 2: أمهات النخبة ─────────────────────────────────────────────────────
-with col_b:
-    st.markdown(f"""
-    <div class="pen-card pen-elite">
-        <div class="pen-header">⭐ خانة الأمهات النخبة &nbsp;·&nbsp; {len(elite)} رأس</div>
-    </div>""", unsafe_allow_html=True)
-    if elite.empty:
-        st.info("لا توجد أمهات نخبة بعد (نعاج ولدت 3 مرات فأكثر)")
-    else:
-        st.dataframe(
-            elite.drop(columns=["الخانة"]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-col_c, col_d = st.columns(2)
-
-# ── خانة 3: كباش وفحول ───────────────────────────────────────────────────────
-with col_c:
-    st.markdown(f"""
-    <div class="pen-card pen-males">
-        <div class="pen-header">🔵 خانة الكباش والفحول &nbsp;·&nbsp; {len(males)} رأس</div>
-    </div>""", unsafe_allow_html=True)
-    if males.empty:
-        st.info("لا يوجد كباش أو فحول مسجلون بعد")
-    else:
-        st.dataframe(
-            males.drop(columns=["الخانة"]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-# ── خانة 4: بكاري وطليان ─────────────────────────────────────────────────────
-with col_d:
-    st.markdown(f"""
-    <div class="pen-card pen-young">
-        <div class="pen-header">🟣 خانة البكاري والطليان &nbsp;·&nbsp; {len(young)} رأس</div>
-    </div>""", unsafe_allow_html=True)
-    if young.empty:
-        st.info("لا يوجد صغار مسجلون بعد")
-    else:
-        st.dataframe(
-            young.drop(columns=["الخانة"]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-# ─── عرض القطيع الكامل ───────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### 📋 سجل القطيع الكامل")
-
-if df.empty:
-    st.markdown("""
-    <div style="text-align:center; padding:40px; color:#66bb6a; font-size:18px;">
-        🐑 القطيع فارغ – استخدم القائمة الجانبية لإضافة رؤوس جديدة
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    styled_df = df.copy()
-    st.dataframe(
-        styled_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "الخانة": st.column_config.Column(width="medium"),
-        }
-    )
-    
