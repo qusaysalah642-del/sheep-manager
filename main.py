@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-import ast # مهمة لتحويل نصوص الأبناء إلى قوائم
+import ast 
 
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Sheep Manager Pro", layout="wide")
@@ -14,10 +14,8 @@ C_BG = "#0d2818"
 
 if not os.path.exists("images"): os.makedirs("images")
 
-# إعداد حالة الرسائل
 if "toast" not in st.session_state: st.session_state.toast = None
 
-# عرض الرسالة إذا وجدت
 if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
@@ -34,7 +32,6 @@ st.markdown(f"""
 # ─── إدارة البيانات ────────────────────────────────────────────────────────
 DATA_FILE = "herd_data.json"
 HISTORY_FILE = "medical_history.json"
-# أضفنا "الأم" و "الأبناء" للقائمة
 REQUIRED_COLS = ["ID", "القلادة", "الجنس", "العمر", "وحدة", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء"]
 
 def save_image(uploaded_file):
@@ -94,7 +91,6 @@ with tab1:
     
     if not df.empty:
         for idx, row in df.iterrows():
-            # معالجة قائمة الأبناء
             try: kids_list = ast.literal_eval(row.get('الأبناء', '[]'))
             except: kids_list = []
             
@@ -109,7 +105,10 @@ with tab1:
                     st.write(f"**العمر:** {row.get('العمر', 0)} {unit}")
                     st.write(f"**الولادات:** {row.get('عدد الولادات', 0)}")
                     if row.get('الأم'): st.write(f"**الأم:** {row['الأم']}")
-                    if kids_list: st.write(f"**الأبناء:** {', '.join(kids_list)}")
+                    if kids_list: 
+                        st.write("**الأبناء:**")
+                        for i, kid in enumerate(kids_list, 1):
+                            st.write(f"{i}. {kid}")
 
 with tab2:
     st.subheader("💉 إجراء طبي")
@@ -178,16 +177,11 @@ with tab4:
             age_unit = st.radio("وحدة العمر:", ["شهر", "سنة"], horizontal=True)
             age_val = st.number_input("قيمة العمر:", 0)
             births = st.number_input("الولادات", 0)
-            
-            # قائمة لاختيار الأم
             mothers = ["لا يوجد"] + st.session_state.herd[st.session_state.herd["الجنس"].isin(["أنثى", "أنثى صغيرة"])]["القلادة"].tolist()
             mother_sel = st.selectbox("الأم (اختياري)", mothers)
-            
             img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
             if st.form_submit_button("إضافة"):
                 img_path = save_image(img_file)
-                
-                # إذا اختار أم، نضيف هذا الرأس لقائمة أبنائها
                 if mother_sel != "لا يوجد":
                     m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == mother_sel].index[0]
                     kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
@@ -212,17 +206,14 @@ with tab4:
             
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
-                
                 genders = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
                 current_g = sheep_row.get("الجنس", "أنثى")
                 gender_idx = genders.index(current_g) if current_g in genders else 0
                 edit_gender = st.selectbox("الجنس", genders, index=gender_idx)
-                
                 edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
                 edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
                 
-                # تعديل الأم
                 mothers = ["لا يوجد"] + st.session_state.herd[st.session_state.herd["الجنس"].isin(["أنثى", "أنثى صغيرة"]) & (st.session_state.herd["القلادة"] != edit_collar)]["القلادة"].tolist()
                 old_mother = sheep_row.get("الأم", "لا يوجد")
                 if old_mother == "": old_mother = "لا يوجد"
@@ -237,14 +228,11 @@ with tab4:
                 new_img = st.file_uploader("تحديث الصورة (اختياري)", type=['jpg', 'png'])
                 
                 if st.form_submit_button("حفظ التعديلات"):
-                    # تحديث الأم والأبناء
                     if old_mother != edit_mother:
-                        # حذف من الأم القديمة
                         if old_mother != "لا يوجد" and old_mother in st.session_state.herd["القلادة"].values:
                             m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == old_mother].index[0]
                             kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
                             if edit_collar in kids: kids.remove(edit_collar); st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
-                        # إضافة للأم الجديدة
                         if edit_mother != "لا يوجد" and edit_mother in st.session_state.herd["القلادة"].values:
                             m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == edit_mother].index[0]
                             kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
@@ -269,7 +257,6 @@ with tab4:
                     st.rerun()
             
             if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
-                # حذف من قائمة أبناء الأم قبل حذف الرأس
                 m_name = st.session_state.herd.at[idx, "الأم"]
                 if m_name and m_name in st.session_state.herd["القلادة"].values:
                     m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == m_name].index[0]
