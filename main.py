@@ -13,6 +13,14 @@ C_BG = "#0d2818"
 
 if not os.path.exists("images"): os.makedirs("images")
 
+# إعداد حالة الرسائل
+if "toast" not in st.session_state: st.session_state.toast = None
+
+# عرض الرسالة إذا وجدت
+if st.session_state.toast:
+    st.toast(st.session_state.toast)
+    st.session_state.toast = None
+
 st.markdown(f"""
 <style>
     .stApp {{ background-color: {C_BG}; color: #e8f5e9; }}
@@ -89,7 +97,7 @@ with tab2:
             new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
             st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
             save_data(st.session_state.history, HISTORY_FILE)
-            st.success("تم الحفظ!")
+            st.session_state.toast = "تمت إضافة الإجراء بنجاح! ✅"
             st.rerun()
     else:
         st.warning("يجب إضافة أغنام أولاً.")
@@ -113,11 +121,13 @@ with tab3:
                         if new_img:
                             st.session_state.history.at[idx, "صورة"] = save_image(new_img)
                         save_data(st.session_state.history, HISTORY_FILE)
+                        st.session_state.toast = "تم التعديل بنجاح! 📝"
                         st.rerun()
                 
                 if st.button("🗑️ حذف السجل", key=f"del_{idx}"):
                     st.session_state.history = st.session_state.history.drop(idx)
                     save_data(st.session_state.history, HISTORY_FILE)
+                    st.session_state.toast = "تم الحذف بنجاح! 🗑️"
                     st.rerun()
     else:
         st.write("لا يوجد إجراءات مسجلة بعد.")
@@ -141,6 +151,7 @@ with tab4:
                 }])
                 st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
                 save_data(st.session_state.herd, DATA_FILE)
+                st.session_state.toast = "تمت الإضافة بنجاح! ✅"
                 st.rerun()
 
     if not st.session_state.herd.empty:
@@ -164,10 +175,12 @@ with tab4:
                     if new_img:
                         st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
                     save_data(st.session_state.herd, DATA_FILE)
+                    st.session_state.toast = "تم التعديل بنجاح! 📝"
                     st.rerun()
             
             if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
                 st.session_state.herd = st.session_state.herd.drop(idx)
                 save_data(st.session_state.herd, DATA_FILE)
+                st.session_state.toast = "تم الحذف بنجاح! 🗑️"
                 st.rerun()
                 
