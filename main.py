@@ -14,7 +14,6 @@ st.markdown(f"""
 <style>
     .stApp {{ background-color: {C_BG}; color: #e8f5e9; }}
     .stButton > button {{ background-color: {C_PRIMARY}; color: white; border-radius: 8px; }}
-    .metric-card {{ background: #1b3a2a; padding: 15px; border-radius: 10px; border: 1px solid #388e3c; text-align: center; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,58 +51,69 @@ with tab1:
     st.subheader("لوحة التحكم")
     df = st.session_state.herd
     
-    # ── حساب الأعداد ──
+    # ── إحصائيات ──
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="metric-card">الكل<br><h3>{len(df)}</h3></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="metric-card">ذكور<br><h3>{len(df[df["الجنس"] == "ذكر"])}</h3></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="metric-card">إناث<br><h3>{len(df[df["الجنس"] == "أنثى"])}</h3></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="metric-card">صغار<br><h3>{len(df[df["الجنس"].isin(["ذكر صغير", "أنثى صغيرة"])])}</h3></div>', unsafe_allow_html=True)
+    c1.metric("الكل", len(df))
+    c2.metric("ذكور", len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]))
+    c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
+    c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير")]))
 
     st.divider()
 
-    # ── نموذج التعديل (يظهر فقط عند الضغط على تعديل) ──
+    # ── نموذج التعديل الشامل ──
     if st.session_state.edit_id:
         st.subheader("تعديل بيانات الرأس")
-        target_id = st.session_state.edit_id
-        idx = df[df["ID"] == target_id].index[0]
+        idx = df[df["ID"] == st.session_state.edit_id].index[0]
         animal = df.loc[idx]
+        
         with st.form("edit_form"):
             new_collar = st.text_input("رقم القلادة", animal["القلادة"])
+            options = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
+            new_gender = st.selectbox("الجنس", options, index=options.index(animal["الجنس"]))
+            new_age = st.number_input("العمر (أشهر)", value=int(animal["العمر"]))
             new_births = st.number_input("عدد الولادات", value=int(animal["عدد الولادات"]))
-            col_a, col_b = st.columns(2)
-            if col_a.form_submit_button("حفظ التعديلات"):
+            
+            c_save, c_cancel = st.columns(2)
+            if c_save.form_submit_button("حفظ التعديلات"):
                 st.session_state.herd.at[idx, "القلادة"] = new_collar
+                st.session_state.herd.at[idx, "الجنس"] = new_gender
+                st.session_state.herd.at[idx, "العمر"] = new_age
                 st.session_state.herd.at[idx, "عدد الولادات"] = new_births
                 st.session_state.edit_id = None
                 save_data(st.session_state.herd)
                 st.rerun()
-            if col_b.form_submit_button("إلغاء"):
+            if c_cancel.form_submit_button("إلغاء"):
                 st.session_state.edit_id = None
                 st.rerun()
     
-    # ── قائمة القطيع ──
+    # ── قائمة القطيع مع زر الحذف ──
     st.subheader("سجل القطيع")
     filter_type = st.selectbox("فرز القطيع حسب:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
-    
     view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
     
     for idx, row in view_df.iterrows():
-        col1, col2 = st.columns([0.8, 0.2])
-        col1.write(f"🏷️ **{row['القلادة']}** | {row['الجنس']} | عمر: {row['العمر']} شهر | ولادات: {row['عدد الولادات']}")
-        if col2.button("تعديل", key=f"edit_{row['ID']}"):
+        col_text, col_edit, col_del = st.columns([0.6, 0.2, 0.2])
+        col_text.write(f"🏷️ **{row['القلادة']}** | {row['الجنس']} | عمر: {row['العمر']} | ولادات: {row['عدد الولادات']}")
+        if col_edit.button("تعديل", key=f"edit_{row['ID']}"):
             st.session_state.edit_id = row['ID']
+            st.rerun()
+        if col_del.button("حذف", key=f"del_{row['ID']}"):
+            st.session_state.herd = st.session_state.herd[st.session_state.herd["ID"] != row["ID"]]
+            save_data(st.session_state.herd)
             st.rerun()
 
 with tab2:
-    # (نفس كود السجل الصحي السابق)
     st.subheader("تسجيل إجراء طبي")
     selected_collars = st.multiselect("اختر الأغنام:", st.session_state.herd["القلادة"].tolist())
     action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"])
-    if action_type == "تطعيم": treatment_options = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
-    elif action_type == "جرعة طفيلية": treatment_options = ['جرعة كبدية', 'جرعة معوية']
-    else: treatment_options = ['تغطيس شامل']
-    treatment = st.selectbox("نوع العلاج/اللقاح:", treatment_options)
+    
+    if action_type == "تطعيم": tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
+    elif action_type == "جرعة طفيلية": tr_opts = ['جرعة كبدية', 'جرعة معوية']
+    else: tr_opts = ['تغطيس شامل']
+        
+    treatment = st.selectbox("نوع العلاج:", tr_opts)
     date = st.date_input("التاريخ:")
+    
     if st.button("حفظ الإجراء"):
         for collar in selected_collars:
             idx = st.session_state.herd[st.session_state.herd["القلادة"] == collar].index[0]
@@ -123,7 +133,7 @@ with tab3:
         collar = st.text_input("رقم القلادة")
         gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
         age = st.number_input("العمر (أشهر)", 0)
-        births = st.number_input("عدد الولادات (للالاناث فقط)", 0) if gender == "أنثى" else 0
+        births = st.number_input("عدد الولادات", 0)
         submitted = st.form_submit_button("إضافة")
         if submitted:
             new_row = pd.DataFrame([{
