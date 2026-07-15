@@ -69,13 +69,11 @@ with tab1:
     df = st.session_state.herd
     
     if not df.empty:
-        # حساب الأعداد
         total = len(df)
         males = len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])])
         females = len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])])
         young = len(df[df["الجنس"].str.contains("صغير", na=False)])
         
-        # إنشاء مربعات الإحصائيات (2x2)
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
@@ -132,14 +130,13 @@ with tab3:
                 with st.form(f"edit_hist_{idx}"):
                     new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
                     
-                    # قوائم الإجراء والعلاج
+                    # قوائم الإجراء والعلاج مع on_change=st.rerun لتحديث الخيارات فورياً
                     action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
-                    curr_action = row['الإجراء']
+                    curr_action = st.session_state.get(f"a_{idx}", row['الإجراء'])
                     act_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
                     
-                    new_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}")
+                    new_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}", on_change=st.rerun)
                     
-                    # تحديد خيارات العلاج بناءً على الإجراء المختار
                     if new_action == "تطعيم":
                         tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
                     elif new_action == "جرعة طفيلية":
@@ -212,7 +209,6 @@ with tab4:
                 edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
                 
-                # خيار حذف الصورة
                 current_img = sheep_row.get("صورة", "")
                 remove_img = False
                 if current_img and os.path.exists(current_img):
@@ -240,7 +236,6 @@ with tab4:
                     st.rerun()
             
             if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
-                # حذف الصورة المرتبطة عند حذف الرأس بالكامل
                 img_to_del = st.session_state.herd.at[idx, "صورة"]
                 if img_to_del and os.path.exists(img_to_del): os.remove(img_to_del)
                 
