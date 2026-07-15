@@ -104,13 +104,17 @@ with tab3:
                     new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
                     new_action = st.text_input("الإجراء", value=row['الإجراء'], key=f"a_{idx}")
                     new_treat = st.text_input("العلاج", value=row['العلاج'], key=f"t_{idx}")
+                    new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"img_h_{idx}")
+                    
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
                         st.session_state.history.at[idx, "الإجراء"] = new_action
                         st.session_state.history.at[idx, "العلاج"] = new_treat
+                        if new_img:
+                            st.session_state.history.at[idx, "صورة"] = save_image(new_img)
                         save_data(st.session_state.history, HISTORY_FILE)
                         st.rerun()
-                # زر الحذف عاد هنا:
+                
                 if st.button("🗑️ حذف السجل", key=f"del_{idx}"):
                     st.session_state.history = st.session_state.history.drop(idx)
                     save_data(st.session_state.history, HISTORY_FILE)
@@ -148,12 +152,14 @@ with tab4:
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
                 edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
+                edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
                 new_img = st.file_uploader("تحديث الصورة (اختياري)", type=['jpg', 'png'])
                 
                 if st.form_submit_button("حفظ التعديلات"):
                     st.session_state.herd.at[idx, "القلادة"] = edit_collar
                     st.session_state.herd.at[idx, "العمر"] = edit_age
+                    st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
                     st.session_state.herd.at[idx, "وحدة"] = edit_unit
                     if new_img:
                         st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
