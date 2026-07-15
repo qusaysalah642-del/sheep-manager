@@ -163,7 +163,6 @@ with tab4:
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
                 
-                # إضافة اختيار الجنس
                 genders = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
                 current_g = sheep_row.get("الجنس", "أنثى")
                 gender_idx = genders.index(current_g) if current_g in genders else 0
@@ -172,21 +171,39 @@ with tab4:
                 edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
                 edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
+                
+                # خيار حذف الصورة
+                current_img = sheep_row.get("صورة", "")
+                remove_img = False
+                if current_img and os.path.exists(current_img):
+                    st.image(current_img, width=100)
+                    remove_img = st.checkbox("🗑️ حذف الصورة الحالية")
+                
                 new_img = st.file_uploader("تحديث الصورة (اختياري)", type=['jpg', 'png'])
                 
                 if st.form_submit_button("حفظ التعديلات"):
                     st.session_state.herd.at[idx, "القلادة"] = edit_collar
-                    st.session_state.herd.at[idx, "الجنس"] = edit_gender # حفظ الجنس الجديد
+                    st.session_state.herd.at[idx, "الجنس"] = edit_gender
                     st.session_state.herd.at[idx, "العمر"] = edit_age
                     st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
                     st.session_state.herd.at[idx, "وحدة"] = edit_unit
-                    if new_img:
+                    
+                    if remove_img:
+                        if os.path.exists(current_img): os.remove(current_img)
+                        st.session_state.herd.at[idx, "صورة"] = ""
+                    elif new_img:
+                        if os.path.exists(current_img): os.remove(current_img)
                         st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
+                        
                     save_data(st.session_state.herd, DATA_FILE)
                     st.session_state.toast = "تم التعديل بنجاح! 📝"
                     st.rerun()
             
             if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
+                # حذف الصورة المرتبطة عند حذف الرأس بالكامل
+                img_to_del = st.session_state.herd.at[idx, "صورة"]
+                if img_to_del and os.path.exists(img_to_del): os.remove(img_to_del)
+                
                 st.session_state.herd = st.session_state.herd.drop(idx)
                 save_data(st.session_state.herd, DATA_FILE)
                 st.session_state.toast = "تم الحذف بنجاح! 🗑️"
