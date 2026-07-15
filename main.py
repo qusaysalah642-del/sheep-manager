@@ -25,9 +25,8 @@ st.markdown(f"""
 <style>
     .stApp {{ background-color: {C_BG}; color: #e8f5e9; }}
     .stButton > button {{ background-color: {C_PRIMARY}; color: white; border-radius: 8px; width: 100%; }}
-    [data-testid="column"] {{ width: 25% !important; flex: 1 1 25% !important; }}
-    [data-testid="stMetricValue"] {{ font-size: 16px !important; }}
-    [data-testid="stMetricLabel"] {{ font-size: 12px !important; }}
+    [data-testid="stMetricValue"] {{ font-size: 18px !important; color: #a5d6a7 !important; }}
+    [data-testid="stMetricLabel"] {{ font-size: 14px !important; color: #c8e6c9 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,25 +65,28 @@ st.title("🐑 Sheep Manager Pro")
 tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة"])
 
 with tab1:
-    st.subheader("إحصائيات القطيع")
+    st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
     
     if not df.empty:
-        # تقسيم الإحصائيات إلى جدول 2x2 لتكون أرتب على الموبايل
-        c1, c2 = st.columns(2)
-        
         # حساب الأعداد
         total = len(df)
         males = len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])])
         females = len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])])
         young = len(df[df["الجنس"].str.contains("صغير", na=False)])
         
-        with c1:
-            st.metric("العدد الكلي", total)
-            st.metric("ذكور", males)
-        with c2:
-            st.metric("إناث", females)
-            st.metric("صغار", young)
+        # إنشاء مربعات الإحصائيات (2x2)
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.container(border=True):
+                st.metric("🐑 العدد الكلي", total)
+            with st.container(border=True):
+                st.metric("♂️ ذكور", males)
+        with col2:
+            with st.container(border=True):
+                st.metric("♀️ إناث", females)
+            with st.container(border=True):
+                st.metric("👶 صغار", young)
     
     st.divider()
     
@@ -102,7 +104,7 @@ with tab1:
                     st.write(f"**الولادات:** {row.get('عدد الولادات', 0)}")
 
 with tab2:
-    st.subheader("إجراء طبي")
+    st.subheader("💉 إجراء طبي")
     if not st.session_state.herd.empty:
         selected_collars = st.multiselect("اختر الأغنام:", st.session_state.herd["القلادة"].tolist())
         action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True)
@@ -151,7 +153,7 @@ with tab3:
         st.write("لا يوجد إجراءات مسجلة بعد.")
 
 with tab4:
-    st.subheader("إدارة القطيع")
+    st.subheader("➕ إدارة القطيع")
     with st.expander("➕ إضافة رأس جديد", expanded=True):
         with st.form("add_form"):
             collar = st.text_input("القلادة")
