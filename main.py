@@ -127,33 +127,33 @@ with tab3:
             with st.expander(f"🗓️ {row['التاريخ']} - {row['الإجراء']} ({row['العلاج']})"):
                 if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=100)
                 
+                # إخراج قائمة الإجراء من الـ form لتجنب الخطأ
+                action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
+                curr_action = row['الإجراء']
+                act_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
+                # التغيير هنا: القائمة خارج الفورم
+                selected_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}")
+                
+                # تحديد خيارات العلاج بناءً على القيمة المختارة
+                if selected_action == "تطعيم":
+                    tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
+                elif selected_action == "جرعة طفيلية":
+                    tr_opts = ['جرعة كبدية', 'جرعة معوية']
+                else:
+                    tr_opts = ['تغطيس شامل']
+                
                 with st.form(f"edit_hist_{idx}"):
                     new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
                     
-                    # قوائم الإجراء والعلاج مع on_change=st.rerun لتحديث الخيارات فورياً
-                    action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
-                    curr_action = st.session_state.get(f"a_{idx}", row['الإجراء'])
-                    act_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
-                    
-                    new_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}", on_change=st.rerun)
-                    
-                    if new_action == "تطعيم":
-                        tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
-                    elif new_action == "جرعة طفيلية":
-                        tr_opts = ['جرعة كبدية', 'جرعة معوية']
-                    else:
-                        tr_opts = ['تغطيس شامل']
-                    
                     curr_treat = row['العلاج']
                     tr_idx = tr_opts.index(curr_treat) if curr_treat in tr_opts else 0
-                    
                     new_treat = st.selectbox("العلاج", tr_opts, index=tr_idx, key=f"t_{idx}")
                     
                     new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"img_h_{idx}")
                     
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
-                        st.session_state.history.at[idx, "الإجراء"] = new_action
+                        st.session_state.history.at[idx, "الإجراء"] = selected_action
                         st.session_state.history.at[idx, "العلاج"] = new_treat
                         if new_img:
                             st.session_state.history.at[idx, "صورة"] = save_image(new_img)
