@@ -110,6 +110,11 @@ with tab3:
                         st.session_state.history.at[idx, "العلاج"] = new_treat
                         save_data(st.session_state.history, HISTORY_FILE)
                         st.rerun()
+                # زر الحذف عاد هنا:
+                if st.button("🗑️ حذف السجل", key=f"del_{idx}"):
+                    st.session_state.history = st.session_state.history.drop(idx)
+                    save_data(st.session_state.history, HISTORY_FILE)
+                    st.rerun()
     else:
         st.write("لا يوجد إجراءات مسجلة بعد.")
 
