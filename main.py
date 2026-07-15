@@ -41,14 +41,11 @@ def load_data(file, columns):
         with open(file, "r", encoding="utf-8") as f:
             data = json.load(f)
             df = pd.DataFrame(data)
-            
-            # إصلاح تلقائي: إضافة الأعمدة المفقودة وحفظ الملف فوراً
             needs_save = False
             for col in columns:
                 if col not in df.columns:
                     df[col] = "[]" if col in ["اللقاحات", "الجرعات"] else ""
                     needs_save = True
-            
             if needs_save:
                 df.to_json(file, orient="records", force_ascii=False, indent=4)
             return df
@@ -64,13 +61,12 @@ if "history" not in st.session_state:
 
 # ─── واجهة التطبيق ─────────────────────────────────────────────────────────
 st.title("🐑 Sheep Manager Pro")
-tab1, tab2, tab3, tab4 = st.tabs(["🏠", "💉", "📋", "➕"])
+# هنا تم إرجاع الأسماء
+tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة"])
 
 with tab1:
     st.subheader("القطيع")
     df = st.session_state.herd
-    
-    # حماية من كون df فارغاً
     if not df.empty:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("الكل", len(df))
@@ -78,13 +74,12 @@ with tab1:
         c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
         c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
     else:
-        st.write("القطيع فارغ حالياً، أضف رؤوساً جديدة من تبويب (➕).")
+        st.write("القطيع فارغ حالياً، أضف رؤوساً جديدة من تبويب (➕ إدارة).")
     
     st.divider()
     if not df.empty:
         filter_type = st.selectbox("فرز:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
         view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
-        
         for idx, row in view_df.iterrows():
             with st.expander(f"🏷️ {row['القلادة']}"):
                 if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
@@ -99,7 +94,6 @@ with tab2:
         treatment = st.selectbox("العلاج:", tr_opts)
         date = str(st.date_input("التاريخ:"))
         img_file = st.file_uploader("صورة الإجراء (اختياري)", type=['jpg', 'png'])
-        
         if st.button("حفظ الإجراء"):
             img_path = save_image(img_file)
             new_hist = pd.DataFrame([{"التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
@@ -120,7 +114,7 @@ with tab3:
         st.write("لا يوجد إجراءات مسجلة بعد.")
 
 with tab4:
-    st.subheader("إضافة رأس جديد")
+    st.subheader("إدارة القطيع")
     with st.form("add_form"):
         collar = st.text_input("القلادة")
         gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
@@ -129,7 +123,6 @@ with tab4:
         actual_age = age_val * 12 if age_unit == "سنوات" else age_val
         births = st.number_input("الولادات", 0)
         img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
-        
         if st.form_submit_button("إضافة"):
             img_path = save_image(img_file)
             new_row = pd.DataFrame([{
