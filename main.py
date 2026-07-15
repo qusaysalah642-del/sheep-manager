@@ -56,7 +56,7 @@ with tab1:
     c1.metric("الكل", len(df))
     c2.metric("ذكور", len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]))
     c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
-    c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير")]))
+    c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
 
     st.divider()
 
@@ -68,8 +68,13 @@ with tab1:
         
         with st.form("edit_form"):
             new_collar = st.text_input("رقم القلادة", animal["القلادة"])
+            
+            # ── تصحيح ذكي لاختيار الجنس ──
             options = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
-            new_gender = st.selectbox("الجنس", options, index=options.index(animal["الجنس"]))
+            current_gender = animal["الجنس"]
+            default_idx = options.index(current_gender) if current_gender in options else 0
+            
+            new_gender = st.selectbox("الجنس", options, index=default_idx)
             new_age = st.number_input("العمر (أشهر)", value=int(animal["العمر"]))
             new_births = st.number_input("عدد الولادات", value=int(animal["عدد الولادات"]))
             
@@ -144,4 +149,4 @@ with tab3:
             st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
             save_data(st.session_state.herd)
             st.rerun()
-            
+    
