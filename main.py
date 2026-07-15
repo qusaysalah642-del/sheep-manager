@@ -41,16 +41,10 @@ def load_data(file, columns):
         with open(file, "r", encoding="utf-8") as f:
             data = json.load(f)
             df = pd.DataFrame(data)
-            needs_save = False
+            # التأكد من وجود كافة الأعمدة المطلوبة
             for col in columns:
                 if col not in df.columns:
-                    # تعيين قيم افتراضية للأعمدة الجديدة
-                    if col == "وحدة": df[col] = "شهر"
-                    elif col in ["اللقاحات", "الجرعات"]: df[col] = "[]"
-                    else: df[col] = ""
-                    needs_save = True
-            if needs_save:
-                df.to_json(file, orient="records", force_ascii=False, indent=4)
+                    df[col] = "شهر" if col == "وحدة" else ("[]" if col in ["اللقاحات", "الجرعات"] else "")
             return df
     except: return pd.DataFrame(columns=columns)
 
@@ -74,16 +68,16 @@ with tab1:
         c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
         c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
     else:
-        st.write("القطيع فارغ حالياً، أضف رؤوساً جديدة من تبويب (➕ إدارة).")
+        st.write("القطيع فارغ حالياً.")
     
     st.divider()
     if not df.empty:
-        filter_type = st.selectbox("فرز:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
-        view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
-        for idx, row in view_df.iterrows():
+        for idx, row in df.iterrows():
             with st.expander(f"🏷️ {row['القلادة']}"):
                 if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
-                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} {row.get('وحدة', 'شهر')} | الولادات: {row.get('عدد الولادات', 0)}")
+                # استخدام .get للحماية من الأخطاء
+                unit = row.get("وحدة", "شهر")
+                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} {unit} | الولادات: {row.get('عدد الولادات', 0)}")
 
 with tab2:
     st.subheader("إجراء طبي")
@@ -93,10 +87,8 @@ with tab2:
         tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم" else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
         treatment = st.selectbox("العلاج:", tr_opts)
         date = str(st.date_input("التاريخ:"))
-        img_file = st.file_uploader("صورة الإجراء (اختياري)", type=['jpg', 'png'])
         if st.button("حفظ الإجراء"):
-            img_path = save_image(img_file)
-            new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
+            new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": ""}])
             st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
             save_data(st.session_state.history, HISTORY_FILE)
             st.success("تم الحفظ!")
@@ -107,24 +99,18 @@ with tab2:
 with tab3:
     st.subheader("📋 السجل الطبي")
     if not st.session_state.history.empty:
-        # عرض السجلات مع إمكانية التعديل
         for idx, row in st.session_state.history.iterrows():
             with st.expander(f"🗓️ {row['التاريخ']} - {row['الإجراء']} ({row['العلاج']})"):
                 with st.form(f"edit_hist_{idx}"):
-                    new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']))
-                    new_action = st.text_input("الإجراء", value=row['الإجراء'])
-                    new_treat = st.text_input("العلاج", value=row['العلاج'])
+                    new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
+                    new_action = st.text_input("الإجراء", value=row['الإجراء'], key=f"a_{idx}")
+                    new_treat = st.text_input("العلاج", value=row['العلاج'], key=f"t_{idx}")
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
                         st.session_state.history.at[idx, "الإجراء"] = new_action
                         st.session_state.history.at[idx, "العلاج"] = new_treat
                         save_data(st.session_state.history, HISTORY_FILE)
-                        st.success("تم التعديل!")
                         st.rerun()
-                if st.button("حذف السجل", key=f"del_{idx}"):
-                    st.session_state.history = st.session_state.history.drop(idx)
-                    save_data(st.session_state.history, HISTORY_FILE)
-                    st.rerun()
     else:
         st.write("لا يوجد إجراءات مسجلة بعد.")
 
@@ -137,12 +123,10 @@ with tab4:
             age_unit = st.radio("وحدة العمر:", ["شهر", "سنة"], horizontal=True)
             age_val = st.number_input("قيمة العمر:", 0)
             births = st.number_input("الولادات", 0)
-            img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
             if st.form_submit_button("إضافة"):
-                img_path = save_image(img_file)
                 new_row = pd.DataFrame([{
                     "ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, 
-                    "العمر": age_val, "وحدة": age_unit, "عدد الولادات": births, "صورة": img_path,
+                    "العمر": age_val, "وحدة": age_unit, "عدد الولادات": births, "صورة": "",
                     "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": ""
                 }])
                 st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
@@ -158,7 +142,10 @@ with tab4:
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
                 edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
-                edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row["وحدة"] == "شهر" else 1)
+                # استخدام .get للحماية
+                current_unit = sheep_row.get("وحدة", "شهر")
+                edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if current_unit == "شهر" else 1)
+                
                 if st.form_submit_button("حفظ التعديلات"):
                     st.session_state.herd.at[idx, "القلادة"] = edit_collar
                     st.session_state.herd.at[idx, "العمر"] = edit_age
