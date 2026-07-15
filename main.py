@@ -23,7 +23,6 @@ st.markdown(f"""
 <style>
     .stApp {{ background-color: {C_BG}; color: #e8f5e9; }}
     .stButton > button {{ background-color: {C_PRIMARY}; color: white; border-radius: 8px; width: 100%; }}
-    [data-testid="stMetricValue"] {{ font-size: 18px !important; color: #a5d6a7 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,9 +66,8 @@ with tab1:
     st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
     if not df.empty:
-        total = len(df)
         col1, col2 = st.columns(2)
-        with col1: st.metric("🐑 العدد الكلي", total)
+        with col1: st.metric("🐑 العدد الكلي", len(df))
         with col2: st.metric("♀️ إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
     
     st.divider()
@@ -98,7 +96,6 @@ with tab2:
             new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": ""}])
             st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
             save_data(st.session_state.history, HISTORY_FILE)
-            st.session_state.toast = "تمت الإضافة! ✅"
             st.rerun()
 
 with tab3:
@@ -117,10 +114,22 @@ with tab4:
         with st.form("add_form"):
             collar = st.text_input("القلادة")
             gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
+            age_val = st.number_input("العمر:", 0)
+            age_unit = st.selectbox("الوحدة:", ["شهر", "سنة"])
+            births = st.number_input("عدد الولادات:", 0)
             mothers_list = st.session_state.herd[st.session_state.herd["الجنس"].isin(["أنثى", "أنثى صغيرة"])]["القلادة"].tolist()
             mother_sel = st.selectbox("الأم (اختياري):", ["لا يوجد"] + mothers_list)
+            img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
+            
             if st.form_submit_button("إضافة"):
-                new_row = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, "العمر": 0, "وحدة": "شهر", "عدد الولادات": 0, "صورة": "", "الأم": mother_sel if mother_sel != "لا يوجد" else "", "الأبناء": "[]", "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": ""}])
+                img_path = save_image(img_file)
+                if mother_sel != "لا يوجد":
+                    m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == mother_sel].index[0]
+                    current_kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
+                    current_kids.append(collar)
+                    st.session_state.herd.at[m_idx, "الأبناء"] = str(current_kids)
+                
+                new_row = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, "العمر": age_val, "وحدة": age_unit, "عدد الولادات": births, "صورة": img_path, "الأم": mother_sel if mother_sel != "لا يوجد" else "", "الأبناء": "[]", "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": ""}])
                 st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
                 save_data(st.session_state.herd, DATA_FILE)
                 st.rerun()
@@ -142,11 +151,9 @@ with tab4:
                 current_m = sheep_row.get("الأم", "لا يوجد")
                 edit_mother = st.selectbox("الأم:", ["لا يوجد"] + mothers_list, index=0 if current_m == "لا يوجد" or current_m == "" else (mothers_list.index(current_m) + 1 if current_m in mothers_list else 0))
                 
-                remove_img = st.checkbox("🗑️ حذف الصورة الحالية")
                 new_img = st.file_uploader("تحديث الصورة", type=['jpg', 'png'])
                 
                 if st.form_submit_button("حفظ التعديلات"):
-                    # تحديث الأبناء (نفس منطق التحديث السابق)
                     old_mother = sheep_row.get("الأم", "")
                     if old_mother != edit_mother:
                         if old_mother in st.session_state.herd["القلادة"].values:
@@ -164,7 +171,6 @@ with tab4:
                     st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
                     st.session_state.herd.at[idx, "وحدة"] = edit_unit
                     st.session_state.herd.at[idx, "الأم"] = edit_mother if edit_mother != "لا يوجد" else ""
-                    if remove_img: st.session_state.herd.at[idx, "صورة"] = ""
                     if new_img: st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
                     
                     save_data(st.session_state.herd, DATA_FILE)
