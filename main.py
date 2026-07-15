@@ -11,7 +11,6 @@ st.set_page_config(page_title="Sheep Manager Pro", layout="wide")
 C_PRIMARY = "#2e7d32"
 C_BG = "#0d2818"
 
-# إنشاء مجلد الصور إذا لم يكن موجوداً
 if not os.path.exists("images"): os.makedirs("images")
 
 st.markdown(f"""
@@ -27,6 +26,7 @@ st.markdown(f"""
 # ─── إدارة البيانات ────────────────────────────────────────────────────────
 DATA_FILE = "herd_data.json"
 HISTORY_FILE = "medical_history.json"
+REQUIRED_COLS = ["ID", "القلادة", "الجنس", "العمر", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس"]
 
 def save_image(uploaded_file):
     if uploaded_file is not None:
@@ -38,14 +38,20 @@ def save_image(uploaded_file):
 def load_data(file, columns):
     if not os.path.exists(file): return pd.DataFrame(columns=columns)
     try:
-        with open(file, "r", encoding="utf-8") as f: return pd.DataFrame(json.load(f))
+        with open(file, "r", encoding="utf-8") as f:
+            df = pd.DataFrame(json.load(f))
+            # إصلاح تلقائي: إضافة الأعمدة المفقودة إذا وُجدت
+            for col in columns:
+                if col not in df.columns:
+                    df[col] = "[]" if col in ["اللقاحات", "الجرعات"] else ""
+            return df
     except: return pd.DataFrame(columns=columns)
 
 def save_data(df, file):
     df.to_json(file, orient="records", force_ascii=False, indent=4)
 
 if "herd" not in st.session_state: 
-    st.session_state.herd = load_data(DATA_FILE, ["ID", "القلادة", "الجنس", "العمر", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس"])
+    st.session_state.herd = load_data(DATA_FILE, REQUIRED_COLS)
 if "history" not in st.session_state: 
     st.session_state.history = load_data(HISTORY_FILE, ["التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"])
 
@@ -68,7 +74,8 @@ with tab1:
     
     for idx, row in view_df.iterrows():
         with st.expander(f"🏷️ {row['القلادة']}"):
-            if row['صورة'] and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
+            # التحقق من وجود الصورة قبل العرض
+            if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
             st.write(f"الجنس: {row['الجنس']} | العمر: {row['العمر']} شهر")
 
 with tab2:
@@ -82,7 +89,6 @@ with tab2:
     
     if st.button("حفظ الإجراء"):
         img_path = save_image(img_file)
-        # تحديث السجل الطبي التاريخي
         new_hist = pd.DataFrame([{"التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
         st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
         save_data(st.session_state.history, HISTORY_FILE)
@@ -93,7 +99,7 @@ with tab3:
     if not st.session_state.history.empty:
         for _, row in st.session_state.history.iterrows():
             st.write(f"**{row['التاريخ']}** - {row['الإجراء']} ({row['العلاج']})")
-            if row['صورة'] and os.path.exists(row['صورة']): st.image(row['صورة'], width=100)
+            if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=100)
             st.divider()
 
 with tab4:
@@ -101,11 +107,9 @@ with tab4:
     with st.form("add_form"):
         collar = st.text_input("القلادة")
         gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
-        # اختيار العمر
         age_unit = st.radio("وحدة العمر:", ["أشهر", "سنوات"], horizontal=True)
         age_val = st.number_input("قيمة العمر:", 0)
         actual_age = age_val * 12 if age_unit == "سنوات" else age_val
-        
         births = st.number_input("الولادات", 0)
         img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
         
@@ -118,5 +122,5 @@ with tab4:
             }])
             st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
             save_data(st.session_state.herd, DATA_FILE)
-         
-            st.rerun()
+        
+        st.rerun()
