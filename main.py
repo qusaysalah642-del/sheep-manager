@@ -66,22 +66,40 @@ st.title("🐑 Sheep Manager Pro")
 tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة"])
 
 with tab1:
-    st.subheader("القطيع")
+    st.subheader("إحصائيات القطيع")
     df = st.session_state.herd
+    
     if not df.empty:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("الكل", len(df))
-        c2.metric("ذكور", len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]))
-        c3.metric("إناث", len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]))
-        c4.metric("صغار", len(df[df["الجنس"].str.contains("صغير", na=False)]))
+        # تقسيم الإحصائيات إلى جدول 2x2 لتكون أرتب على الموبايل
+        c1, c2 = st.columns(2)
+        
+        # حساب الأعداد
+        total = len(df)
+        males = len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])])
+        females = len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])])
+        young = len(df[df["الجنس"].str.contains("صغير", na=False)])
+        
+        with c1:
+            st.metric("العدد الكلي", total)
+            st.metric("ذكور", males)
+        with c2:
+            st.metric("إناث", females)
+            st.metric("صغار", young)
     
     st.divider()
+    
     if not df.empty:
         for idx, row in df.iterrows():
             with st.expander(f"🏷️ {row['القلادة']}"):
-                if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=150)
-                unit = row.get("وحدة", "شهر")
-                st.write(f"الجنس: {row.get('الجنس', 'غير معروف')} | العمر: {row.get('العمر', 0)} {unit} | الولادات: {row.get('عدد الولادات', 0)}")
+                col_img, col_info = st.columns([1, 2])
+                with col_img:
+                    if row.get('صورة') and os.path.exists(row['صورة']):
+                        st.image(row['صورة'], use_container_width=True)
+                with col_info:
+                    unit = row.get("وحدة", "شهر")
+                    st.write(f"**الجنس:** {row.get('الجنس', 'غير معروف')}")
+                    st.write(f"**العمر:** {row.get('العمر', 0)} {unit}")
+                    st.write(f"**الولادات:** {row.get('عدد الولادات', 0)}")
 
 with tab2:
     st.subheader("إجراء طبي")
