@@ -64,9 +64,19 @@ with tab2:
     st.subheader("تسجيل إجراء طبي")
     selected_collars = st.multiselect("اختر الأغنام:", st.session_state.herd["القلادة"].tolist())
     action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"])
-    treatment = st.selectbox("نوع العلاج/اللقاح:", ["إيفومك", "معوي/دموي", "طاعون", "جدري", "حمى قلاعية", "جرعة كبدية", "تغطيس شامل"])
+    
+    # ── قائمة العلاجات المتغيرة حسب النوع ──
+    if action_type == "تطعيم":
+        treatment_options = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
+    elif action_type == "جرعة طفيلية":
+        treatment_options = ['جرعة كبدية', 'جرعة معوية']
+    else:
+        treatment_options = ['تغطيس شامل']
+        
+    treatment = st.selectbox("نوع العلاج/اللقاح:", treatment_options)
     date = st.date_input("التاريخ:")
-    if st.button("حفظ"):
+    
+    if st.button("حفظ الإجراء"):
         for collar in selected_collars:
             idx = st.session_state.herd[st.session_state.herd["القلادة"] == collar].index[0]
             if action_type == "تغطيس": st.session_state.herd.at[idx, "آخر تغطيس"] = str(date)
