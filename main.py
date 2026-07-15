@@ -17,7 +17,6 @@ if not os.path.exists("images"): os.makedirs("images")
 # إعداد حالة الرسائل
 if "toast" not in st.session_state: st.session_state.toast = None
 
-# عرض الرسالة إذا وجدت
 if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
@@ -34,7 +33,6 @@ st.markdown(f"""
 # ─── إدارة البيانات ────────────────────────────────────────────────────────
 DATA_FILE = "herd_data.json"
 HISTORY_FILE = "medical_history.json"
-# تمت إضافة "الأم" و "الأبناء" للقائمة المطلوبة
 REQUIRED_COLS = ["ID", "القلادة", "الجنس", "العمر", "وحدة", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء"]
 
 def save_image(uploaded_file):
@@ -52,7 +50,6 @@ def load_data(file, columns):
             df = pd.DataFrame(data)
             for col in columns:
                 if col not in df.columns:
-                    # تعيين قيم افتراضية للأعمدة الجديدة
                     if col == "الأبناء": df[col] = "[]"
                     elif col == "الأم": df[col] = ""
                     else: df[col] = "شهر" if col == "وحدة" else ("[]" if col in ["اللقاحات", "الجرعات"] else "")
@@ -72,44 +69,26 @@ tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 
 with tab1:
     st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
-    
     if not df.empty:
-        total = len(df)
-        males = len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])])
-        females = len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])])
-        young = len(df[df["الجنس"].str.contains("صغير", na=False)])
-        
+        total, males, females, young = len(df), len(df[df["الجنس"].isin(["ذكر", "ذكر صغير"])]), len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])]), len(df[df["الجنس"].str.contains("صغير", na=False)])
         col1, col2 = st.columns(2)
         with col1:
-            with st.container(border=True):
-                st.metric("🐑 العدد الكلي", total)
-            with st.container(border=True):
-                st.metric("♂️ ذكور", males)
+            st.metric("🐑 العدد الكلي", total); st.metric("♂️ ذكور", males)
         with col2:
-            with st.container(border=True):
-                st.metric("♀️ إناث", females)
-            with st.container(border=True):
-                st.metric("👶 صغار", young)
+            st.metric("♀️ إناث", females); st.metric("👶 صغار", young)
     
     st.divider()
-    
     if not df.empty:
         for idx, row in df.iterrows():
-            # تحويل قائمة الأبناء من نص إلى قائمة بايثون للعرض
-            try:
-                kids_list = ast.literal_eval(row['الأبناء'])
-            except:
-                kids_list = []
-                
+            try: kids_list = ast.literal_eval(row['الأبناء'])
+            except: kids_list = []
             with st.expander(f"🏷️ {row['القلادة']} {'(أم)' if len(kids_list) > 0 else ''}"):
                 col_img, col_info = st.columns([1, 2])
                 with col_img:
-                    if row.get('صورة') and os.path.exists(row['صورة']):
-                        st.image(row['صورة'], use_container_width=True)
+                    if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], use_container_width=True)
                 with col_info:
-                    unit = row.get("وحدة", "شهر")
                     st.write(f"**الجنس:** {row.get('الجنس', 'غير معروف')}")
-                    st.write(f"**العمر:** {row.get('العمر', 0)} {unit}")
+                    st.write(f"**العمر:** {row.get('العمر', 0)} {row.get('وحدة', 'شهر')}")
                     if row.get('الأم'): st.write(f"**الأم:** {row['الأم']}")
                     if len(kids_list) > 0: st.write(f"**الأبناء:** {', '.join(kids_list)}")
 
@@ -121,56 +100,22 @@ with tab2:
         tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم" else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
         treatment = st.selectbox("العلاج:", tr_opts)
         date = str(st.date_input("التاريخ:"))
-        img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'])
         if st.button("حفظ الإجراء"):
-            img_path = save_image(img_file)
-            new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": img_path}])
+            new_hist = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "التاريخ": date, "الإجراء": action_type, "العلاج": treatment, "الأغنام": ", ".join(selected_collars), "صورة": ""}])
             st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
             save_data(st.session_state.history, HISTORY_FILE)
-            st.session_state.toast = "تمت إضافة الإجراء بنجاح! ✅"
+            st.session_state.toast = "تمت الإضافة! ✅"
             st.rerun()
-    else:
-        st.warning("يجب إضافة أغنام أولاً.")
 
 with tab3:
     st.subheader("📋 السجل الطبي")
     if not st.session_state.history.empty:
         for idx, row in st.session_state.history.iterrows():
-            with st.expander(f"🗓️ {row['التاريخ']} - {row['الإجراء']} ({row['العلاج']})"):
-                if row.get('صورة') and os.path.exists(row['صورة']): st.image(row['صورة'], width=100)
-                
-                action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
-                curr_action = row['الإجراء']
-                act_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
-                selected_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}")
-                
-                if selected_action == "تطعيم": tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
-                elif selected_action == "جرعة طفيلية": tr_opts = ['جرعة كبدية', 'جرعة معوية']
-                else: tr_opts = ['تغطيس شامل']
-                
-                with st.form(f"edit_hist_{idx}"):
-                    new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
-                    curr_treat = row['العلاج']
-                    tr_idx = tr_opts.index(curr_treat) if curr_treat in tr_opts else 0
-                    new_treat = st.selectbox("العلاج", tr_opts, index=tr_idx, key=f"t_{idx}")
-                    new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"img_h_{idx}")
-                    
-                    if st.form_submit_button("حفظ التعديلات"):
-                        st.session_state.history.at[idx, "التاريخ"] = str(new_date)
-                        st.session_state.history.at[idx, "الإجراء"] = selected_action
-                        st.session_state.history.at[idx, "العلاج"] = new_treat
-                        if new_img: st.session_state.history.at[idx, "صورة"] = save_image(new_img)
-                        save_data(st.session_state.history, HISTORY_FILE)
-                        st.session_state.toast = "تم التعديل بنجاح! 📝"
-                        st.rerun()
-                
+            with st.expander(f"🗓️ {row['التاريخ']} - {row['الإجراء']}"):
                 if st.button("🗑️ حذف السجل", key=f"del_{idx}"):
                     st.session_state.history = st.session_state.history.drop(idx)
                     save_data(st.session_state.history, HISTORY_FILE)
-                    st.session_state.toast = "تم الحذف بنجاح! 🗑️"
                     st.rerun()
-    else:
-        st.write("لا يوجد إجراءات مسجلة بعد.")
 
 with tab4:
     st.subheader("➕ إدارة القطيع")
@@ -178,34 +123,17 @@ with tab4:
         with st.form("add_form"):
             collar = st.text_input("القلادة")
             gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
-            age_unit = st.radio("وحدة العمر:", ["شهر", "سنة"], horizontal=True)
-            age_val = st.number_input("قيمة العمر:", 0)
-            births = st.number_input("الولادات", 0)
-            
-            # فلترة الأمهات المتاحة
             mothers_list = st.session_state.herd[st.session_state.herd["الجنس"].isin(["أنثى", "أنثى صغيرة"])]["القلادة"].tolist()
             mother_sel = st.selectbox("الأم (اختياري):", ["لا يوجد"] + mothers_list)
-            
-            img_file = st.file_uploader("صورة الغنمة", type=['jpg', 'png'])
             if st.form_submit_button("إضافة"):
-                img_path = save_image(img_file)
-                
-                # تحديث قائمة أبناء الأم إذا تم اختيارها
                 if mother_sel != "لا يوجد":
                     m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == mother_sel].index[0]
                     current_kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
                     current_kids.append(collar)
                     st.session_state.herd.at[m_idx, "الأبناء"] = str(current_kids)
-
-                new_row = pd.DataFrame([{
-                    "ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, 
-                    "العمر": age_val, "وحدة": age_unit, "عدد الولادات": births, "صورة": img_path,
-                    "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": "",
-                    "الأم": mother_sel if mother_sel != "لا يوجد" else "", "الأبناء": "[]"
-                }])
+                new_row = pd.DataFrame([{"ID": str(datetime.now().timestamp()), "القلادة": collar, "الجنس": gender, "العمر": 0, "وحدة": "شهر", "عدد الولادات": 0, "صورة": "", "اللقاحات": "[]", "الجرعات": "[]", "آخر تغطيس": "", "الأم": mother_sel if mother_sel != "لا يوجد" else "", "الأبناء": "[]"}])
                 st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
                 save_data(st.session_state.herd, DATA_FILE)
-                st.session_state.toast = "تمت الإضافة بنجاح! ✅"
                 st.rerun()
 
     if not st.session_state.herd.empty:
@@ -216,41 +144,33 @@ with tab4:
             
             with st.form("edit_form"):
                 edit_collar = st.text_input("القلادة", value=sheep_row["القلادة"])
-                genders = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
-                current_g = sheep_row.get("الجنس", "أنثى")
-                gender_idx = genders.index(current_g) if current_g in genders else 0
-                edit_gender = st.selectbox("الجنس", genders, index=gender_idx)
-                edit_age = st.number_input("العمر", value=int(sheep_row["العمر"]))
-                edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
-                edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
+                edit_gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"], index=["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"].index(sheep_row["الجنس"]))
                 
-                current_img = sheep_row.get("صورة", "")
-                remove_img = st.checkbox("🗑️ حذف الصورة الحالية") if current_img else False
-                new_img = st.file_uploader("تحديث الصورة (اختياري)", type=['jpg', 'png'])
+                # تحديث الأم في التعديل
+                mothers_list = st.session_state.herd[st.session_state.herd["الجنس"].isin(["أنثى", "أنثى صغيرة"]) & (st.session_state.herd["القلادة"] != edit_collar)]["القلادة"].tolist()
+                current_m = sheep_row.get("الأم", "لا يوجد")
+                if current_m == "": current_m = "لا يوجد"
+                edit_mother = st.selectbox("الأم:", ["لا يوجد"] + mothers_list, index=0 if current_m == "لا يوجد" else (mothers_list.index(current_m) + 1 if current_m in mothers_list else 0))
                 
                 if st.form_submit_button("حفظ التعديلات"):
+                    # تحديث سجل الأبناء للأم القديمة والجديدة
+                    old_mother = sheep_row.get("الأم", "")
+                    if old_mother != edit_mother:
+                        # حذف من الأم القديمة
+                        if old_mother in st.session_state.herd["القلادة"].values:
+                            m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == old_mother].index[0]
+                            kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
+                            if sheep_row["القلادة"] in kids: kids.remove(sheep_row["القلادة"]); st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
+                        # إضافة للأم الجديدة
+                        if edit_mother != "لا يوجد":
+                            m_idx = st.session_state.herd[st.session_state.herd["القلادة"] == edit_mother].index[0]
+                            kids = ast.literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
+                            kids.append(sheep_row["القلادة"])
+                            st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
+                    
                     st.session_state.herd.at[idx, "القلادة"] = edit_collar
                     st.session_state.herd.at[idx, "الجنس"] = edit_gender
-                    st.session_state.herd.at[idx, "العمر"] = edit_age
-                    st.session_state.herd.at[idx, "عدد الولادات"] = edit_births
-                    st.session_state.herd.at[idx, "وحدة"] = edit_unit
-                    
-                    if remove_img:
-                        if os.path.exists(current_img): os.remove(current_img)
-                        st.session_state.herd.at[idx, "صورة"] = ""
-                    elif new_img:
-                        if os.path.exists(current_img): os.remove(current_img)
-                        st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
-                        
+                    st.session_state.herd.at[idx, "الأم"] = edit_mother if edit_mother != "لا يوجد" else ""
                     save_data(st.session_state.herd, DATA_FILE)
-                    st.session_state.toast = "تم التعديل بنجاح! 📝"
                     st.rerun()
             
-            if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
-                img_to_del = st.session_state.herd.at[idx, "صورة"]
-                if img_to_del and os.path.exists(img_to_del): os.remove(img_to_del)
-                st.session_state.herd = st.session_state.herd.drop(idx)
-                save_data(st.session_state.herd, DATA_FILE)
-                st.session_state.toast = "تم الحذف بنجاح! 🗑️"
-                st.rerun()
-                
