@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
 from datetime import datetime
 
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
@@ -183,13 +185,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ─── البيانات في الجلسة ───────────────────────────────────────────────────────
+# ─── إدارة الملف السحابي لحفظ البيانات ──────────────────────────────────────────
+DATA_FILE = "herd_data.json"
+
+def load_from_file():
+    if not os.path.exists(DATA_FILE):
+        return pd.DataFrame(columns=[
+            "رقم القلادة", "الجنس", "العمر (أشهر)",
+            "عدد الولادات", "الحالة الصحية", "عدد المواليد المنتجة",
+            "تاريخ الإضافة"
+        ])
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return pd.DataFrame(data)
+    except:
+        return pd.DataFrame(columns=[
+            "رقم القلادة", "الجنس", "العمر (أشهر)",
+            "عدد الولادات", "الحالة الصحية", "عدد المواليد المنتجة",
+            "تاريخ الإضافة"
+        ])
+
+def save_to_file(df):
+    try:
+        # تحويل الداتافريم إلى قاموس وحفظه بتنسيق JSON
+        df_dict = df.to_dict(orient="records")
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(df_dict, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.error(f"خطأ أثناء الحفظ: {e}")
+
+# تحميل البيانات من الملف عند الإقلاع
 if "herd" not in st.session_state:
-    st.session_state.herd = pd.DataFrame(columns=[
-        "رقم القلادة", "الجنس", "العمر (أشهر)",
-        "عدد الولادات", "الحالة الصحية", "عدد المواليد المنتجة",
-        "تاريخ الإضافة"
-    ])
+    st.session_state.herd = load_from_file()
 
 # ─── دالة تصنيف الرأس ────────────────────────────────────────────────────────
 def classify(row):
@@ -228,16 +256,18 @@ with st.sidebar:
             new_row = {
                 "رقم القلادة": collar.strip(),
                 "الجنس": gender,
-                "العمر (أشهر)": age,
-                "عدد الولادات": births,
+                "العمر (أشهر)": int(age),
+                "عدد الولادات": int(births),
                 "الحالة الصحية": health,
-                "عدد المواليد المنتجة": offspring,
+                "عدد المواليد المنتجة": int(offspring),
                 "تاريخ الإضافة": datetime.now().strftime("%Y-%m-%d %H:%M")
             }
             st.session_state.herd = pd.concat(
                 [st.session_state.herd, pd.DataFrame([new_row])],
                 ignore_index=True
             )
+            # حفظ التغيير في الملف فوراً
+            save_to_file(st.session_state.herd)
             st.success(f"✅ تمت إضافة القلادة {collar.strip()} بنجاح")
             st.rerun()
 
@@ -251,6 +281,8 @@ with st.sidebar:
             st.session_state.herd = st.session_state.herd[
                 st.session_state.herd["رقم القلادة"] != del_collar
             ].reset_index(drop=True)
+            # حفظ التغيير في الملف فوراً بعد الحذف
+            save_to_file(st.session_state.herd)
             st.success(f"تم حذف القلادة {del_collar}")
             st.rerun()
 
@@ -394,16 +426,6 @@ if df.empty:
     </div>
     """, unsafe_allow_html=True)
 else:
-    # تلوين الخانات في الجدول
-    def style_pen(val):
-        colors = {
-            "عزل صحي":     "background-color:#3e1a1a; color:#ef9a9a",
-            "أمهات النخبة": "background-color:#3e3400; color:#fff176",
-            "كباش وفحول":  "background-color:#0d2340; color:#90caf9",
-            "بكاري وطليان":"background-color:#2a1a3e; color:#ce93d8",
-        }
-        return colors.get(val, "")
-
     styled_df = df.copy()
     st.dataframe(
         styled_df,
@@ -412,5 +434,5 @@ else:
         column_config={
             "الخانة": st.column_config.Column(width="medium"),
         }
-        )
+    )
     
