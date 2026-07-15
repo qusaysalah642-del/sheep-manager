@@ -68,12 +68,9 @@ with tab1:
         
         with st.form("edit_form"):
             new_collar = st.text_input("رقم القلادة", animal["القلادة"])
-            
-            # ── تصحيح ذكي لاختيار الجنس ──
             options = ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"]
             current_gender = animal["الجنس"]
             default_idx = options.index(current_gender) if current_gender in options else 0
-            
             new_gender = st.selectbox("الجنس", options, index=default_idx)
             new_age = st.number_input("العمر (أشهر)", value=int(animal["العمر"]))
             new_births = st.number_input("عدد الولادات", value=int(animal["عدد الولادات"]))
@@ -91,21 +88,29 @@ with tab1:
                 st.session_state.edit_id = None
                 st.rerun()
     
-    # ── قائمة القطيع مع زر الحذف ──
+    # ── قائمة القطيع مع عرض السجل الطبي ──
     st.subheader("سجل القطيع")
     filter_type = st.selectbox("فرز القطيع حسب:", ["الكل", "ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"])
     view_df = df if filter_type == "الكل" else df[df["الجنس"] == filter_type]
     
     for idx, row in view_df.iterrows():
-        col_text, col_edit, col_del = st.columns([0.6, 0.2, 0.2])
-        col_text.write(f"🏷️ **{row['القلادة']}** | {row['الجنس']} | عمر: {row['العمر']} | ولادات: {row['عدد الولادات']}")
-        if col_edit.button("تعديل", key=f"edit_{row['ID']}"):
-            st.session_state.edit_id = row['ID']
-            st.rerun()
-        if col_del.button("حذف", key=f"del_{row['ID']}"):
-            st.session_state.herd = st.session_state.herd[st.session_state.herd["ID"] != row["ID"]]
-            save_data(st.session_state.herd)
-            st.rerun()
+        # تنسيق عرض البيانات الطبية
+        vacs = ", ".join(json.loads(row['اللقاحات'])) if (row['اللقاحات'] and row['اللقاحات'] != "[]") else "لا يوجد"
+        doses = ", ".join(json.loads(row['الجرعات'])) if (row['الجرعات'] and row['الجرعات'] != "[]") else "لا يوجد"
+        last_dip = row['آخر تغطيس'] if row['آخر تغطيس'] else "لم يتم"
+        
+        with st.expander(f"🏷️ القلادة: {row['القلادة']} | {row['الجنس']}"):
+            st.write(f"**العمر:** {row['العمر']} شهر | **عدد الولادات:** {row['عدد الولادات']}")
+            st.info(f"💉 **اللقاحات:** {vacs}\n\n💊 **الجرعات:** {doses}\n\n🛁 **آخر تغطيس:** {last_dip}")
+            
+            col_edit, col_del = st.columns(2)
+            if col_edit.button("تعديل البيانات", key=f"edit_{row['ID']}"):
+                st.session_state.edit_id = row['ID']
+                st.rerun()
+            if col_del.button("حذف الرأس", key=f"del_{row['ID']}"):
+                st.session_state.herd = st.session_state.herd[st.session_state.herd["ID"] != row["ID"]]
+                save_data(st.session_state.herd)
+                st.rerun()
 
 with tab2:
     st.subheader("تسجيل إجراء طبي")
@@ -130,7 +135,8 @@ with tab2:
                 if treatment not in current: current.append(treatment)
                 st.session_state.herd.at[idx, col_name] = json.dumps(current)
         save_data(st.session_state.herd)
-        st.success("تم الحفظ!")
+        st.success("تم الحفظ بنجاح!")
+        st.rerun()
 
 with tab3:
     st.subheader("إضافة رأس جديد")
@@ -149,4 +155,4 @@ with tab3:
             st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
             save_data(st.session_state.herd)
             st.rerun()
-    
+            
