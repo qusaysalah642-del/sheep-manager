@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import uuid
+import shutil
 from datetime import datetime
 
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
@@ -13,10 +14,21 @@ C_BG = "#0d2818"
 
 if not os.path.exists("images"): os.makedirs("images")
 
+# ─── الإعداد الخاص بالاستقلالية ونقل البيانات القديمة ───────────────────────
+st.sidebar.header("⚙️ إعدادات القطيع")
+herd_id = st.sidebar.text_input("معرف القطيع (للفصل بين الأجهزة):", value="general")
+
+DATA_FILE = f"herd_data_{herd_id}.json"
+HISTORY_FILE = f"medical_history_{herd_id}.json"
+
+# كود النقل التلقائي (Migration) إذا كانت الملفات القديمة موجودة
+if not os.path.exists(DATA_FILE) and os.path.exists("herd_data.json"):
+    shutil.copy("herd_data.json", DATA_FILE)
+if not os.path.exists(HISTORY_FILE) and os.path.exists("medical_history.json"):
+    shutil.copy("medical_history.json", HISTORY_FILE)
+
 # إعداد حالة الرسائل
 if "toast" not in st.session_state: st.session_state.toast = None
-
-# عرض الرسالة إذا وجدت
 if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
@@ -32,8 +44,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ─── إدارة البيانات ────────────────────────────────────────────────────────
-DATA_FILE = "herd_data.json"
-HISTORY_FILE = "medical_history.json"
 REQUIRED_COLS = ["ID", "القلادة", "الجنس", "العمر", "وحدة", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس"]
 
 def save_image(uploaded_file):
@@ -58,11 +68,13 @@ def load_data(file, columns):
 def save_data(df, file):
     df.to_json(file, orient="records", force_ascii=False, indent=4)
 
-if "herd" not in st.session_state: st.session_state.herd = load_data(DATA_FILE, REQUIRED_COLS)
-if "history" not in st.session_state: st.session_state.history = load_data(HISTORY_FILE, ["ID", "التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"])
+# تحميل البيانات بناءً على المعرف الحالي
+st.session_state.herd = load_data(DATA_FILE, REQUIRED_COLS)
+st.session_state.history = load_data(HISTORY_FILE, ["ID", "التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"])
 
 # ─── واجهة التطبيق ─────────────────────────────────────────────────────────
 st.title("🐑 Sheep Manager Pro")
+st.caption(f"أنت تعمل الآن على قاعدة بيانات: **{herd_id}**")
 tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة"])
 
 with tab1:
@@ -172,7 +184,6 @@ with tab4:
                 edit_births = st.number_input("عدد الولادات", value=int(sheep_row["عدد الولادات"]))
                 edit_unit = st.selectbox("الوحدة", ["شهر", "سنة"], index=0 if sheep_row.get("وحدة", "شهر") == "شهر" else 1)
                 
-                # خيار حذف الصورة
                 current_img = sheep_row.get("صورة", "")
                 remove_img = False
                 if current_img and os.path.exists(current_img):
@@ -200,7 +211,6 @@ with tab4:
                     st.rerun()
             
             if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
-                # حذف الصورة المرتبطة عند حذف الرأس بالكامل
                 img_to_del = st.session_state.herd.at[idx, "صورة"]
                 if img_to_del and os.path.exists(img_to_del): os.remove(img_to_del)
                 
