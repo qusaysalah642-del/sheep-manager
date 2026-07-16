@@ -455,4 +455,65 @@ with tab4:
 
     with m2:
         if not st.session_state.herd.empty:
-            target = st.selectbox("اختر رأساً:", st.session_state.herd["ID"].tolist(), f
+            target = st.selectbox("اختر رأساً:", st.session_state.herd["ID"].tolist(), format_func=format_sheep_label)
+            if target:
+                idx = st.session_state.herd[st.session_state.herd["ID"] == target].index[0]
+                row = st.session_state.herd.iloc[idx]
+                with st.form("edit"):
+                    new_collar = st.text_input("القلادة*", value=row["القلادة"])
+                    new_gender = st.selectbox("الجنس*", ["أنثى","أنثى صغيرة","ذكر","ذكر صغير"],
+                                              index=["أنثى","أنثى صغيرة","ذكر","ذكر صغير"].index(row["الجنس"]))
+                    current_birth = row.get("تاريخ الميلاد", "")
+                    if current_birth:
+                        try:
+                            default_date = datetime.strptime(current_birth, "%Y-%m-%d").date()
+                        except:
+                            default_date = None
+                    else:
+                        default_date = None
+                    new_birth = st.date_input("تاريخ الميلاد", value=default_date)
+                    new_births = st.number_input("عدد الولادات", min_value=0, value=int(row["عدد الولادات"]))
+                    new_mother = st.selectbox("الأم", [None] + st.session_state.herd["ID"].tolist(),
+                                              index=([None] + st.session_state.herd["ID"].tolist()).index(row.get("الأم")) if row.get("الأم") in [None] + st.session_state.herd["ID"].tolist() else 0,
+                                              format_func=lambda x: "بدون" if x is None else format_sheep_label(x))
+                    new_img = st.file_uploader("تحديث الصورة", type=['jpg','png'])
+                    if st.form_submit_button("💾 حفظ"):
+                        st.session_state.herd.at[idx, "القلادة"] = new_collar
+                        st.session_state.herd.at[idx, "الجنس"] = new_gender
+                        st.session_state.herd.at[idx, "تاريخ الميلاد"] = new_birth.strftime("%Y-%m-%d") if new_birth else ""
+                        st.session_state.herd.at[idx, "عدد الولادات"] = new_births
+                        st.session_state.herd.at[idx, "الأم"] = new_mother or ""
+                        if new_img:
+                            safe_delete_image(row.get("صورة"))
+                            st.session_state.herd.at[idx, "صورة"] = save_image_compressed(new_img)
+                        save_data(st.session_state.herd, DATA_FILE)
+                        show_notification("تم التحديث!", "success")
+                        st.rerun()
+                if st.button("🗑️ حذف نهائي", type="primary"):
+                    safe_delete_image(row.get("صورة"))
+                    st.session_state.herd = st.session_state.herd.drop(idx).reset_index(drop=True)
+                    save_data(st.session_state.herd, DATA_FILE)
+                    show_notification("تم الحذف!", "success")
+                    st.rerun()
+        else:
+            st.info("القطيع فارغ")
+
+    with m3:
+        st.download_button("📥 تحميل نسخة احتياطية",
+                           data=json.dumps({"herd": st.session_state.herd.to_dict(orient="records"),
+                                            "history": st.session_state.history.to_dict(orient="records")},
+                                            ensure_ascii=False, indent=2),
+                           file_name=f"backup_{datetime.now().strftime('%Y-%m-%d')}.json",
+                           mime="application/json")
+        uploaded = st.file_uploader("استعادة", type=['json'])
+        if uploaded and st.button("🔄 تأكيد الاستعادة", type="primary"):
+            try:
+                data = json.load(uploaded)
+                st.session_state.herd = pd.DataFrame(data.get("herd", []))
+                st.session_state.history = pd.DataFrame(data.get("history", []))
+                save_data(st.session_state.herd, DATA_FILE)
+                save_data(st.session_state.history, HISTORY_FILE)
+                show_notification("تمت الاستعادة!", "success")
+                st.rerun()
+            except Exception as e:
+                st.error(f"خطأ: {e}")
