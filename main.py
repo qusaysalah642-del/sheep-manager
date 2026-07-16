@@ -81,7 +81,6 @@ st.markdown(f"""
         background: {C_BG_PANEL};
         border: 1px solid {C_BORDER} !important;
         border-radius: 14px !important;
-        overflow: hidden;
         margin-bottom: 10px;
     }}
     [data-testid="stExpander"] summary {{
@@ -207,6 +206,16 @@ def safe_literal_eval(value, default=None):
         result = ast.literal_eval(value)
         return result if isinstance(result, list) else default
     except (ValueError, SyntaxError, TypeError):
+        return default
+
+
+def safe_int(value, default=0):
+    """يحوّل قيمة إلى رقم صحيح بأمان (يتعامل مع فراغ/None/نصوص غير رقمية) لتفادي كسر الواجهة."""
+    try:
+        if value is None or value == "":
+            return default
+        return int(float(value))
+    except (ValueError, TypeError):
         return default
 
 
@@ -412,8 +421,11 @@ with tab1:
                     if row.get('الأم'):
                         st.markdown(f'<p class="muted-note">👩 <b>الأم:</b> {get_collar_by_id(row["الأم"])}</p>', unsafe_allow_html=True)
                     if kids_ids:
-                        kids_names = "، ".join(get_collar_by_id(k) for k in kids_ids)
-                        st.markdown(f'<p class="muted-note">👶 <b>الأبناء:</b> {kids_names}</p>', unsafe_allow_html=True)
+                        kids_html = "".join(
+                            f'<p class="muted-note" style="margin:2px 0;">{i}. {get_collar_by_id(k)}</p>'
+                            for i, k in enumerate(kids_ids, 1)
+                        )
+                        st.markdown(f'<p class="muted-note"><b>👶 الأبناء:</b></p>{kids_html}', unsafe_allow_html=True)
 
 with tab2:
     st.subheader("💉 تسجيل إجراء طبي")
@@ -488,11 +500,4 @@ with tab3:
 
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
-                        st.session_state.history.at[idx, "الإجراء"] = selected_action
-                        st.session_state.history.at[idx, "العلاج"] = new_treat
-
-                        if remove_hist_img:
-                            safe_delete_image(current_hist_img)
-                            st.session_state.history.at[idx, "صورة"] = ""
-                        elif new_img:
-                            safe_delete_imag
+    
