@@ -9,6 +9,10 @@ from datetime import datetime
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wide")
 
+# تهيئة رسائل الإشعار لتبدو واضحة بعد إعادة التشغيل (Rerun)
+if "success_msg" not in st.session_state:
+    st.session_state.success_msg = None
+
 # نظام الألوان والخطوط (Design tokens)
 C_BG_DEEP = "#0b1f16"        
 C_BG_PANEL = "#123326"       
@@ -133,6 +137,11 @@ st.markdown("""
 </div>  
 """, unsafe_allow_html=True)
 
+# عرض رسائل النجاح الثابتة في حال وجودها بعد التحديث
+if st.session_state.success_msg:
+    st.success(st.session_state.success_msg)
+    st.session_state.success_msg = None
+
 # ─── إدارة البيانات ────────────────────────────────────────────────────────
 DATA_FILE = "herd_data.json"
 HISTORY_FILE = "medical_history.json"
@@ -251,7 +260,7 @@ with tab2:
                 }])
                 st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
                 save_data(st.session_state.history, HISTORY_FILE)
-                st.success("تم الحفظ بنجاح!")
+                st.session_state.success_msg = "💉 تم تسجيل الإجراء الطبي بنجاح!"
                 st.rerun()
             else:
                 st.warning("الرجاء اختيار رأس واحد على الأقل.")
@@ -261,20 +270,93 @@ with tab2:
 # ─── 3. السجل الطبي ───
 with tab3:
     st.subheader("📋 السجل الطبي")
-    if not st.session_state.history.empty:
-        for idx, row in st.session_state.history.iterrows():
-            with st.expander(f"🗓️ {row['التاريخ']} | {row['الإجراء']} ({row['العلاج']})"):
-                st.write(f"**الأغنام المعالجة:** {row['الأغنام']}")
-                if row.get('صورة') and os.path.exists(row['صورة']):
-                    st.image(row['صورة'], width=200)
+    
+    # تقسيم السجل الطبي لتبويبين: عرض وتعديل
+    hist_tab1, hist_tab2 = st.tabs(["🔍 عرض السجلات", "✏️ تعديل سجل"])
+    
+    with hist_tab1:
+        if not st.session_state.history.empty:
+            for idx, row in st.session_state.history.iterrows():
+                with st.expander(f"🗓️ {row['التاريخ']} | {row['الإجراء']} ({row['العلاج']})"):
+                    st.write(f"**الأغنام المعالجة:** {row['الأغنام']}")
+                    if row.get('صورة') and os.path.exists(row['صورة']):
+                        st.image(row['صورة'], width=200)
+                    
+                    if st.button(f"🗑️ حذف السجل", key=f"del_hist_{idx}", type="primary"):
+                        safe_delete_image(row.get('صورة'))
+                        st.session_state.history = st.session_state.history.drop(idx).reset_index(drop=True)
+                        save_data(st.session_state.history, HISTORY_FILE)
+                        st.session_state.success_msg = "🗑️ تم حذف السجل الطبي بنجاح!"
+                        st.rerun()
+        else:
+            st.info("لا توجد سجلات طبية حتى الآن.")
+            
+    with hist_tab2:
+        if not st.session_state.history.empty:
+            def format_hist_label(hist_idx):
+                h_row = st.session_state.history.iloc[hist_idx]
+                h_sheep = str(h_row.get('الأغنام', ''))
+                return f"🗓️ {h_row['التاريخ']} - {h_row['الإجراء']} ({h_row['العلاج']}) - الأغنام: {h_sheep[:30]}..."
                 
-                if st.button(f"🗑️ حذف السجل", key=f"del_hist_{idx}", type="primary"):
-                    safe_delete_image(row.get('صورة'))
-                    st.session_state.history = st.session_state.history.drop(idx).reset_index(drop=True)
-                    save_data(st.session_state.history, HISTORY_FILE)
-                    st.rerun()
-    else:
-        st.info("لا توجد سجلات طبية حتى الآن.")
+            hist_indices = list(range(len(st.session_state.history)))
+            selected_hist_idx = st.selectbox("اختر السجل الطبي المراد تعديله:", hist_indices, format_func=format_hist_label)
+            
+            if selected_hist_idx is not None:
+                hist_row = st.session_state.history.iloc[selected_hist_idx]
+                
+                with st.form("edit_history_form"):
+                    st.markdown("### ✏️ تعديل بيانات السجل الطبي")
+                    
+                    try:
+                        curr_date = datetime.strptime(str(hist_row["التاريخ"]), "%Y-%m-%d").date()
+                    except ValueError:
+                        curr_date = datetime.today().date()
+                    new_date = st.date_input("التاريخ:", value=curr_date)
+                    
+                    action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
+                    curr_action = hist_row.get("الإجراء", "تطعيم")
+                    a_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
+                    new_action_type = st.radio("نوع الإجراء:", action_opts, index=a_idx, horizontal=True)
+                    
+                    all_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'جرعة كبدية', 'جرعة معوية', 'تغطيس شامل']
+                    curr_treatment = hist_row.get("العلاج", "")
+                    t_idx = all_opts.index(curr_treatment) if curr_treatment in all_opts else 0
+                    new_treatment = st.selectbox("العلاج:", all_opts, index=t_idx)
+                    
+                    herd_ids = st.session_state.herd["ID"].tolist()
+                    saved_collars = [c.strip() for c in str(hist_row['الأغنام']).split(",")]
+                    default_ids = []
+                    for sid in herd_ids:
+                        if get_collar_by_id(sid) in saved_collars:
+                            default_ids.append(sid)
+                            
+                    new_selected_ids = st.multiselect(
+                        "اختر الأغنام المستهدفة:", 
+                        herd_ids, 
+                        default=default_ids, 
+                        format_func=format_sheep_label
+                    )
+                    
+                    new_hist_img = st.file_uploader("تحديث صورة التوثيق (اتركه فارغاً للاحتفاظ بالصورة الحالية)", type=['jpg', 'png'])
+                    
+                    if st.form_submit_button("💾 حفظ التعديلات على السجل"):
+                        if new_selected_ids:
+                            st.session_state.history.at[selected_hist_idx, "التاريخ"] = str(new_date)
+                            st.session_state.history.at[selected_hist_idx, "الإجراء"] = new_action_type
+                            st.session_state.history.at[selected_hist_idx, "العلاج"] = new_treatment
+                            st.session_state.history.at[selected_hist_idx, "الأغنام"] = ", ".join([get_collar_by_id(sid) for sid in new_selected_ids])
+                            
+                            if new_hist_img:
+                                safe_delete_image(hist_row.get("صورة"))
+                                st.session_state.history.at[selected_hist_idx, "صورة"] = save_image(new_hist_img)
+                                
+                            save_data(st.session_state.history, HISTORY_FILE)
+                            st.session_state.success_msg = "✏️ تم تعديل السجل الطبي بنجاح! ✅"
+                            st.rerun()
+                        else:
+                            st.error("الرجاء اختيار رأس واحد على الأقل.")
+        else:
+            st.info("لا توجد سجلات طبية لتعديلها.")
 
 # ─── 4. إدارة النظام ───
 with tab4:
@@ -312,7 +394,7 @@ with tab4:
                         st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
                         
                     save_data(st.session_state.herd, DATA_FILE)
-                    st.success("تم الإضافة بنجاح!")
+                    st.session_state.success_msg = "🐑 تمت إضافة رأس جديد للقطيع بنجاح! ✅"
                     st.rerun()
                 else:
                     st.error("الرجاء إدخال رقم/اسم القلادة.")
@@ -336,7 +418,6 @@ with tab4:
                     new_gender = c2.selectbox("الجنس*", gender_opts, index=g_idx)
                     
                     c3, c4, c5 = st.columns(3)
-                    
                     curr_age = target_data.get("العمر", 0)
                     safe_age = int(curr_age) if pd.notna(curr_age) and str(curr_age).strip() != "" else 0
                     new_age = c3.number_input("العمر", min_value=0, value=safe_age)
@@ -371,7 +452,7 @@ with tab4:
                                 st.session_state.herd.at[target_idx, "صورة"] = save_image(new_img)
                                 
                             save_data(st.session_state.herd, DATA_FILE)
-                            st.success("تم تحديث البيانات بنجاح! ✅")
+                            st.session_state.success_msg = "✏️ تم تحديث بيانات الرأس بنجاح! ✅"
                             st.rerun()
                         else:
                             st.error("الرجاء إدخال رقم/اسم القلادة.")
@@ -381,7 +462,7 @@ with tab4:
                     safe_delete_image(target_data.get("صورة"))
                     st.session_state.herd = st.session_state.herd.drop(target_idx).reset_index(drop=True)
                     save_data(st.session_state.herd, DATA_FILE)
-                    st.success("تم الحذف بنجاح!")
+                    st.session_state.success_msg = "🗑️ تم حذف الرأس من القطيع نهائياً! ✅"
                     st.rerun()
         else:
             st.info("القطيع فارغ.")
@@ -417,7 +498,7 @@ with tab4:
                     st.session_state.history = pd.DataFrame(restored_data.get("history", []))
                     save_data(st.session_state.herd, DATA_FILE)
                     save_data(st.session_state.history, HISTORY_FILE)
-                    st.success("تم استعادة البيانات بنجاح!")
+                    st.session_state.success_msg = "🔄 تم استعادة البيانات بنجاح! ✅"
                     st.rerun()
                 except Exception as e:
-                    st.error(f"خطأ في الملف: {e}")
+                    st.error(f"خطأ في الملف: {e}")                   
