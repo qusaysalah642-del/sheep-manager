@@ -379,7 +379,6 @@ with tab4:
                             st.error("الرجاء إدخال رقم/اسم القلادة.")
                 
                 st.divider()
-                # زر الحذف معزول ليجوه
                 if st.button("🗑️ حذف هذا الرأس نهائياً", type="primary"):
                     safe_delete_image(target_data.get("صورة"))
                     st.session_state.herd = st.session_state.herd.drop(target_idx).reset_index(drop=True)
@@ -417,4 +416,4 @@ with tab4:
                 try:
                     restored_data = json.load(uploaded_backup)
                     st.session_state.herd = pd.DataFrame(restored_data.get("herd", []))
-                    st.session_state.history = pd.D
+                    st.session_state.history = pd.DataFrame(restored_data.get("history", [
