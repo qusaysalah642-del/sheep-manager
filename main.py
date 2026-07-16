@@ -736,3 +736,110 @@ with tab4:
                 st.success("تم الحذف")
 
                 st.rerun()
+                # ==========================
+# النسخة الاحتياطية
+# ==========================
+
+st.divider()
+st.subheader("💾 النسخ الاحتياطي")
+
+c1, c2 = st.columns(2)
+
+with c1:
+
+    backup = {
+        "herd": st.session_state.herd.to_dict("records"),
+        "history": st.session_state.history.to_dict("records")
+    }
+
+    st.download_button(
+        "📤 تصدير نسخة احتياطية",
+        data=json.dumps(
+            backup,
+            ensure_ascii=False,
+            indent=4
+        ),
+        file_name=f"Sheep_Backup_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+        mime="application/json",
+        use_container_width=True
+    )
+
+with c2:
+
+    backup_file = st.file_uploader(
+        "📥 استيراد نسخة احتياطية",
+        type=["json"]
+    )
+
+    if backup_file:
+
+        try:
+
+            backup = json.load(backup_file)
+
+            herd = pd.DataFrame(
+                backup.get("herd", [])
+            )
+
+            history = pd.DataFrame(
+                backup.get("history", [])
+            )
+
+            for c in REQUIRED_COLS:
+                if c not in herd.columns:
+                    herd[c] = ""
+
+            for c in HISTORY_COLS:
+                if c not in history.columns:
+                    history[c] = ""
+
+            st.session_state.herd = herd
+            st.session_state.history = history
+
+            save_data(
+                herd,
+                DATA_FILE
+            )
+
+            save_data(
+                history,
+                HISTORY_FILE
+            )
+
+            st.success("✅ تم استيراد النسخة الاحتياطية")
+
+            st.rerun()
+
+        except Exception as e:
+
+            st.error(f"فشل الاستيراد\n{e}")
+
+# ==========================
+# معلومات سريعة
+# ==========================
+
+st.divider()
+
+c1, c2, c3 = st.columns(3)
+
+c1.metric(
+    "🐑 عدد الأغنام",
+    len(st.session_state.herd)
+)
+
+c2.metric(
+    "💉 الإجراءات",
+    len(st.session_state.history)
+)
+
+images_count = 0
+
+for img in st.session_state.herd["صورة"]:
+
+    if img and os.path.exists(img):
+        images_count += 1
+
+c3.metric(
+    "🖼️ الصور",
+    images_count
+)
