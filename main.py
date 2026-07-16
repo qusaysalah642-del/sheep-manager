@@ -10,15 +10,15 @@ from datetime import datetime
 st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wide")
 
 # نظام الألوان والخطوط (Design tokens)
-C_BG_DEEP = "#0b1f16"        # خلفية التطبيق الأساسية
-C_BG_PANEL = "#123326"       # خلفية البطاقات / الحقول
-C_BG_PANEL_2 = "#16402f"     # خلفية عند التحويم / تمييز
+C_BG_DEEP = "#0b1f16"
+C_BG_PANEL = "#123326"
+C_BG_PANEL_2 = "#16402f"
 C_BORDER = "rgba(255,255,255,0.08)"
 C_TEXT = "#eef6f0"
 C_TEXT_MUTED = "#93b3a1"
-C_GREEN = "#4c9a6a"          # اللون الأساسي (رعوي)
+C_GREEN = "#4c9a6a"
 C_GREEN_DARK = "#2f6b48"
-C_AMBER = "#d3a15c"          # لون الصوف/الكرملي - العنصر المميز
+C_AMBER = "#d3a15c"
 C_AMBER_DARK = "#a97c3c"
 C_DANGER = "#e2665a"
 
@@ -39,7 +39,6 @@ st.markdown(f"""
 
     .stApp {{ background: linear-gradient(180deg, {C_BG_DEEP} 0%, #0e2a1e 100%); color: {C_TEXT}; }}
 
-    /* ─── الهيدر الرئيسي ─── */
     .app-hero {{
         display: flex; align-items: center; gap: 18px;
         background: linear-gradient(135deg, {C_BG_PANEL} 0%, {C_BG_DEEP} 100%);
@@ -60,7 +59,6 @@ st.markdown(f"""
     .app-hero-title {{ font-size: 26px; font-weight: 800; margin: 0; color: {C_TEXT}; }}
     .app-hero-subtitle {{ font-size: 14px; color: {C_TEXT_MUTED}; margin-top: 2px; }}
 
-    /* ─── تبويبات علوية بشكل كبسولات ─── */
     .stTabs [data-baseweb="tab-list"] {{ gap: 6px; background: transparent; }}
     .stTabs [data-baseweb="tab"] {{
         background: {C_BG_PANEL};
@@ -76,7 +74,6 @@ st.markdown(f"""
         border: 1px solid {C_GREEN} !important;
     }}
 
-    /* ─── البطاقات (containers / expanders) ─── */
     [data-testid="stExpander"] {{
         background: {C_BG_PANEL};
         border: 1px solid {C_BORDER} !important;
@@ -91,7 +88,6 @@ st.markdown(f"""
         border-radius: 14px !important;
     }}
 
-    /* ─── الأزرار ─── */
     .stButton > button {{
         background: linear-gradient(135deg, {C_GREEN} 0%, {C_GREEN_DARK} 100%);
         color: white; border: none; border-radius: 10px; width: 100%;
@@ -108,7 +104,6 @@ st.markdown(f"""
         color: #24170a !important; border: none; border-radius: 10px; font-weight: 800;
     }}
 
-    /* ─── الحقول والمدخلات ─── */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] > div {{
         background: {C_BG_DEEP} !important;
         border: 1px solid {C_BORDER} !important;
@@ -116,7 +111,6 @@ st.markdown(f"""
         color: {C_TEXT} !important;
     }}
 
-    /* ─── المقاييس (Metrics) ─── */
     [data-testid="stMetric"] {{
         background: {C_BG_PANEL};
         border: 1px solid {C_BORDER};
@@ -126,7 +120,6 @@ st.markdown(f"""
     [data-testid="stMetricValue"] {{ font-size: 22px !important; color: {C_AMBER} !important; font-weight: 800 !important; }}
     [data-testid="stMetricLabel"] {{ font-size: 13px !important; color: {C_TEXT_MUTED} !important; }}
 
-    /* ─── شارة "تاق الأذن" — العنصر المميز لهذا التطبيق ─── */
     .ear-tag {{
         display: inline-flex; align-items: center; gap: 8px;
         background: linear-gradient(135deg, {C_AMBER} 0%, {C_AMBER_DARK} 100%);
@@ -151,21 +144,12 @@ st.markdown(f"""
     .chip-row {{ margin-top: 6px; margin-bottom: 4px; }}
     .muted-note {{ color: {C_TEXT_MUTED}; font-size: 13px; }}
 
-    /* ─── الشريط الجانبي ─── */
     section[data-testid="stSidebar"] {{
         background: {C_BG_PANEL};
         border-left: 1px solid {C_BORDER};
     }}
 
     hr {{ border-color: {C_BORDER} !important; }}
-    
-    /* تحسين لرأس تبويب الإدارة الداخلية */
-    .inner-tab-container h2 {{
-        color: {C_AMBER};
-        border-bottom: 1px solid {C_BORDER};
-        padding-bottom: 10px;
-        margin-bottom: 20px;
-    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -188,7 +172,6 @@ HISTORY_COLS = ["ID", "التاريخ", "الإجراء", "العلاج", "ال�
 
 
 def save_image(uploaded_file):
-    """يحفظ صورة مرفوعة ويرجع مسارها، أو نص فارغ إذا لا توجد صورة."""
     if uploaded_file is not None:
         file_path = f"images/{uuid.uuid4()}.jpg"
         with open(file_path, "wb") as f:
@@ -198,7 +181,6 @@ def save_image(uploaded_file):
 
 
 def safe_delete_image(path):
-    """يحذف ملف صورة بأمان إذا كان موجوداً، مع تجاهل أي خطأ بدون كسر التطبيق."""
     if path and isinstance(path, str) and os.path.exists(path):
         try:
             os.remove(path)
@@ -207,7 +189,6 @@ def safe_delete_image(path):
 
 
 def safe_literal_eval(value, default=None):
-    """يحلل نصاً يمثل قائمة بايثون بأمان، ويرجع قيمة افتراضية لو فشل التحليل."""
     if default is None:
         default = []
     try:
@@ -218,7 +199,6 @@ def safe_literal_eval(value, default=None):
 
 
 def safe_int(value, default=0):
-    """يحوّل قيمة إلى رقم صحيح بأمان (يتعامل مع فراغ/None/نصوص غير رقمية) لتفادي كسر الواجهة."""
     try:
         if value is None or value == "":
             return default
@@ -248,7 +228,7 @@ def load_data(file, columns):
                     df[col] = ""
         return df
     except (json.JSONDecodeError, ValueError, OSError) as e:
-        st.error(f"⚠️ تعذرت قراءة ملف البيانات ({file}): {e}. تم تحميل قاعدة بيانات فارغة لتفادي فقدان البيانات الحالية على القرص.")
+        st.error(f"⚠️ تعذرت قراءة ملف البيانات ({file}): {e}")
         return pd.DataFrame(columns=columns)
 
 
@@ -260,12 +240,6 @@ def save_data(df, file):
 
 
 def migrate_relations_to_ids(df):
-    """
-    ترحيل لمرة واحدة: بعض البيانات القديمة كانت تخزّن حقلي 'الأم' و'الأبناء'
-    باسم القلادة (نص) بدلاً من الـ ID الثابت. هذه الدالة تحوّل أي قيمة قديمة
-    من اسم قلادة إلى الـ ID المطابق لها بالقطيع الحالي، وتترك القيم المتوافقة
-    مع الـ IDs كما هي (فتكون الدالة آمنة الاستدعاء أكثر من مرة).
-    """
     if df.empty:
         return df
 
@@ -281,7 +255,7 @@ def migrate_relations_to_ids(df):
             return value
         if value in collar_to_id:
             return collar_to_id[value]
-        return ""  # قيمة قديمة ما نقدر نطابقها (رأس محذوف فعلاً مثلاً)
+        return ""
 
     def resolve_list(value):
         kids = safe_literal_eval(value)
@@ -291,7 +265,6 @@ def migrate_relations_to_ids(df):
                 resolved.append(k)
             elif k in collar_to_id:
                 resolved.append(collar_to_id[k])
-            # نتجاهل أي قيمة ما نقدر نطابقها بدل إظهار "(محذوف)" بدون داعي
         return str(resolved)
 
     df["الأم"] = df["الأم"].apply(resolve_one)
@@ -303,14 +276,13 @@ if "herd" not in st.session_state:
     _herd = load_data(DATA_FILE, REQUIRED_COLS)
     _herd = migrate_relations_to_ids(_herd)
     st.session_state.herd = _herd
-    save_data(st.session_state.herd, DATA_FILE)  # حفظ نتيجة الترحيل فوراً على القرص
+    save_data(st.session_state.herd, DATA_FILE)
 if "history" not in st.session_state:
     st.session_state.history = load_data(HISTORY_FILE, HISTORY_COLS)
 
 
-# ─── دوال مساعدة للعلاقات (الأم/الأبناء) والعرض ─────────────────────────────
+# ─── دوال مساعدة ─────────────────────────────────────────────────────────────
 def get_collar_by_id(sheep_id):
-    """يرجع القلادة الحالية لرأس معيّن حسب الـ ID، أو تنويه لو الرأس محذوف."""
     if not sheep_id:
         return ""
     row = st.session_state.herd[st.session_state.herd["ID"] == sheep_id]
@@ -320,7 +292,6 @@ def get_collar_by_id(sheep_id):
 
 
 def format_sheep_label(sheep_id):
-    """يبني تسمية عرض فريدة تجمع القلادة مع جزء من المعرف لتفادي التشابه بين الرؤوس."""
     row = st.session_state.herd[st.session_state.herd["ID"] == sheep_id]
     if row.empty:
         return sheep_id
@@ -329,12 +300,7 @@ def format_sheep_label(sheep_id):
     return f"{row['القلادة']} ({row['الجنس']} #{short_id})"
 
 
-def format_mother_option(m_id):
-    return "لا يوجد" if m_id is None else format_sheep_label(m_id)
-
-
 def add_kid_to_mother(mother_id, kid_id):
-    """يضيف معرف الابن إلى قائمة أبناء الأم، إن كانت الأم موجودة."""
     m_rows = st.session_state.herd[st.session_state.herd["ID"] == mother_id]
     if m_rows.empty:
         return
@@ -346,7 +312,6 @@ def add_kid_to_mother(mother_id, kid_id):
 
 
 def remove_kid_from_mother(mother_id, kid_id):
-    """يحذف معرف الابن من قائمة أبناء الأم، إن كانت الأم موجودة."""
     m_rows = st.session_state.herd[st.session_state.herd["ID"] == mother_id]
     if m_rows.empty:
         return
@@ -357,7 +322,7 @@ def remove_kid_from_mother(mother_id, kid_id):
         st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
 
 
-# ─── الشريط الجانبي: إحصائيات سريعة ─────────────────────────────────────────
+# ─── الشريط الجانبي ─────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🐑 نظرة سريعة")
     _herd_snap = st.session_state.herd
@@ -449,8 +414,8 @@ with tab2:
                 else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
             )
             treatment = st.selectbox("العلاج:", tr_opts)
-            date = str(st.date_input("التاريخ:"))
-            img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'])
+            date = str(st.date_input("التاريخ:", key="hist_date"))
+            img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'], key="hist_img")
             if st.button("💾 حفظ الإجراء"):
                 if not selected_ids:
                     st.warning("⚠️ الرجاء اختيار رأس واحد على الأقل قبل الحفظ.")
@@ -504,4 +469,47 @@ with tab3:
                     if current_hist_img and os.path.exists(current_hist_img):
                         remove_hist_img = st.checkbox("🗑️ حذف الصورة الحالية", key=f"rm_img_h_{idx}")
 
-                    new_img = st.file_upload
+                    new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"img_h_{idx}")
+
+                    if st.form_submit_button("حفظ التعديلات"):
+                        st.session_state.history.at[idx, "التاريخ"] = str(new_date)
+                        st.session_state.history.at[idx, "الإجراء"] = selected_action
+                        st.session_state.history.at[idx, "العلاج"] = new_treat
+
+                        if remove_hist_img:
+                            safe_delete_image(current_hist_img)
+                            st.session_state.history.at[idx, "صورة"] = ""
+
+                        if new_img is not None:
+                            old_img_path = st.session_state.history.at[idx, "صورة"]
+                            safe_delete_image(old_img_path)
+                            st.session_state.history.at[idx, "صورة"] = save_image(new_img)
+
+                        save_data(st.session_state.history, HISTORY_FILE)
+                        st.session_state.toast = "تم تحديث الإجراء! ✨"
+                        st.rerun()
+    else:
+        st.info("لا يوجد سجل طبي بعد.")
+
+
+# ─── تبويب الإدارة ─────────────────────────────────────────────────────────
+with tab4:
+    st.header("⚙️ لوحة الإدارة")
+    
+    admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs(
+        ["➕ إضافة", "✏️ تعديل", "🗑️ حذف", "💾 النسخة الاحتياطية"]
+    )
+
+    # ─── 1. تبويب الإضافة ───
+    with admin_tab1:
+        st.subheader("➕ إضافة رأس جديد للقطيع")
+        
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                name = st.text_input("رقم القلادة 🏷️", placeholder="مثلاً: 4521", key="add_name")
+                gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"], key="add_gender")
+            with col2:
+                age = st.number_input("العمر", min_value=0, step=1, key="add_age")
+                unit = st.selectbox("وحدة العمر", ["شهر", "سنة"], key="add_unit")
+                
