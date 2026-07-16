@@ -501,3 +501,238 @@ with tab3:
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
     
+with tab4:
+    st.subheader("⚙️ إدارة القطيع")
+
+    manage_tab1, manage_tab2, manage_tab3 = st.tabs(
+        ["➕ إضافة", "✏️ تعديل", "🗑️ حذف"]
+    )
+
+    # =========================
+    # إضافة رأس جديد
+    # =========================
+    with manage_tab1:
+
+        with st.form("add_sheep"):
+
+            collar = st.text_input("🏷️ رقم القلادة")
+
+            gender = st.selectbox(
+                "الجنس",
+                ["ذكر", "أنثى", "ذكر صغير", "أنثى صغيرة"]
+            )
+
+            age = st.number_input(
+                "العمر",
+                min_value=0,
+                step=1
+            )
+
+            unit = st.selectbox(
+                "الوحدة",
+                ["شهر", "سنة"]
+            )
+
+            births = st.number_input(
+                "عدد الولادات",
+                min_value=0,
+                step=1
+            )
+
+            image = st.file_uploader(
+                "صورة",
+                type=["jpg", "jpeg", "png"]
+            )
+
+            submit = st.form_submit_button("➕ إضافة")
+
+            if submit:
+
+                if collar.strip() == "":
+                    st.warning("اكتب رقم القلادة")
+                elif collar in st.session_state.herd["القلادة"].values:
+                    st.error("رقم القلادة موجود مسبقاً")
+                else:
+
+                    img = save_image(image)
+
+                    new_row = pd.DataFrame([{
+
+                        "ID": str(uuid.uuid4()),
+
+                        "القلادة": collar,
+
+                        "الجنس": gender,
+
+                        "العمر": age,
+
+                        "وحدة": unit,
+
+                        "عدد الولادات": births,
+
+                        "صورة": img,
+
+                        "اللقاحات": "[]",
+
+                        "الجرعات": "[]",
+
+                        "آخر تغطيس": "",
+
+                        "الأم": "",
+
+                        "الأبناء": "[]"
+
+                    }])
+
+                    st.session_state.herd = pd.concat(
+                        [st.session_state.herd, new_row],
+                        ignore_index=True
+                    )
+
+                    save_data(
+                        st.session_state.herd,
+                        DATA_FILE
+                    )
+
+                    st.success("تمت الإضافة بنجاح ✅")
+                    st.rerun()
+
+    # =========================
+    # تعديل
+    # =========================
+
+    with manage_tab2:
+
+        if st.session_state.herd.empty:
+
+            st.info("لا توجد بيانات")
+
+        else:
+
+            ids = st.session_state.herd["ID"].tolist()
+
+            selected = st.selectbox(
+                "اختر الرأس",
+                ids,
+                format_func=format_sheep_label
+            )
+
+            row = st.session_state.herd[
+                st.session_state.herd["ID"] == selected
+            ].iloc[0]
+
+            idx = st.session_state.herd[
+                st.session_state.herd["ID"] == selected
+            ].index[0]
+
+            with st.form("edit_sheep"):
+
+                new_collar = st.text_input(
+                    "القلادة",
+                    row["القلادة"]
+                )
+
+                genders = [
+                    "ذكر",
+                    "أنثى",
+                    "ذكر صغير",
+                    "أنثى صغيرة"
+                ]
+
+                new_gender = st.selectbox(
+                    "الجنس",
+                    genders,
+                    index=genders.index(row["الجنس"])
+                )
+
+                new_age = st.number_input(
+                    "العمر",
+                    value=safe_int(row["العمر"])
+                )
+
+                new_unit = st.selectbox(
+                    "الوحدة",
+                    ["شهر", "سنة"],
+                    index=0 if row["وحدة"] == "شهر" else 1
+                )
+
+                new_births = st.number_input(
+                    "عدد الولادات",
+                    value=safe_int(row["عدد الولادات"])
+                )
+
+                new_image = st.file_uploader(
+                    "صورة جديدة",
+                    type=["jpg", "png"]
+                )
+
+                save_btn = st.form_submit_button("💾 حفظ")
+
+                if save_btn:
+
+                    st.session_state.herd.at[idx, "القلادة"] = new_collar
+                    st.session_state.herd.at[idx, "الجنس"] = new_gender
+                    st.session_state.herd.at[idx, "العمر"] = new_age
+                    st.session_state.herd.at[idx, "وحدة"] = new_unit
+                    st.session_state.herd.at[idx, "عدد الولادات"] = new_births
+
+                    if new_image:
+
+                        old = st.session_state.herd.at[idx, "صورة"]
+
+                        safe_delete_image(old)
+
+                        st.session_state.herd.at[idx, "صورة"] = save_image(new_image)
+
+                    save_data(
+                        st.session_state.herd,
+                        DATA_FILE
+                    )
+
+                    st.success("تم حفظ التعديلات ✅")
+
+                    st.rerun()
+
+    # =========================
+    # حذف
+    # =========================
+
+    with manage_tab3:
+
+        if st.session_state.herd.empty:
+
+            st.info("لا توجد بيانات")
+
+        else:
+
+            ids = st.session_state.herd["ID"].tolist()
+
+            delete_id = st.selectbox(
+                "اختر الرأس",
+                ids,
+                format_func=format_sheep_label,
+                key="delete"
+            )
+
+            if st.button("🗑️ حذف الرأس"):
+
+                row = st.session_state.herd[
+                    st.session_state.herd["ID"] == delete_id
+                ].iloc[0]
+
+                safe_delete_image(
+                    row["صورة"]
+                )
+
+                st.session_state.herd = st.session_state.herd[
+                    st.session_state.herd["ID"] != delete_id
+                ].reset_index(drop=True)
+
+                save_data(
+                    st.session_state.herd,
+                    DATA_FILE
+                )
+
+                st.success("تم الحذف")
+
+                st.rerun()
