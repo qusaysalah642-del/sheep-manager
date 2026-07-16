@@ -276,7 +276,7 @@ with tab3:
     else:
         st.info("لا توجد سجلات طبية حتى الآن.")
 
-# ─── 4. إدارة النظام (الجديد) ───
+# ─── 4. إدارة النظام ───
 with tab4:
     mng_tab1, mng_tab2, mng_tab3 = st.tabs(["➕ إضافة رأس جديد", "✏️ تعديل / حذف", "💾 النسخ الاحتياطي"])
     
@@ -320,10 +320,66 @@ with tab4:
     with mng_tab2:
         if not st.session_state.herd.empty:
             edit_target = st.selectbox("اختر الرأس للتعديل أو الحذف:", st.session_state.herd["ID"].tolist(), format_func=format_sheep_label)
+            
             if edit_target:
                 target_idx = st.session_state.herd[st.session_state.herd["ID"] == edit_target].index[0]
                 target_data = st.session_state.herd.iloc[target_idx]
                 
+                with st.form("edit_sheep_form"):
+                    st.markdown("### ✏️ تعديل بيانات الرأس")
+                    c1, c2 = st.columns(2)
+                    new_collar = c1.text_input("القلادة (الرقم أو الاسم)*", value=target_data.get("القلادة", ""))
+                    
+                    gender_opts = ["أنثى", "أنثى صغيرة", "ذكر", "ذكر صغير"]
+                    curr_gender = target_data.get("الجنس", "أنثى")
+                    g_idx = gender_opts.index(curr_gender) if curr_gender in gender_opts else 0
+                    new_gender = c2.selectbox("الجنس*", gender_opts, index=g_idx)
+                    
+                    c3, c4, c5 = st.columns(3)
+                    
+                    # معالجة آمنة للأرقام في حال كانت القيمة فارغة أو NaN
+                    curr_age = target_data.get("العمر", 0)
+                    safe_age = int(curr_age) if pd.notna(curr_age) and str(curr_age).strip() != "" else 0
+                    new_age = c3.number_input("العمر", min_value=0, value=safe_age)
+                    
+                    unit_opts = ["شهر", "سنة"]
+                    curr_unit = target_data.get("وحدة", "شهر")
+                    u_idx = unit_opts.index(curr_unit) if curr_unit in unit_opts else 0
+                    new_unit = c4.selectbox("الوحدة", unit_opts, index=u_idx)
+                    
+                    curr_births = target_data.get("عدد الولادات", 0)
+                    safe_births = int(curr_births) if pd.notna(curr_births) and str(curr_births).strip() != "" else 0
+                    new_births = c5.number_input("عدد الولادات", min_value=0, value=safe_births)
+                    
+                    # اختيار الأم (مع استبعاد الرأس نفسه من القائمة)
+                    possible_mothers = [None] + [sid for sid in st.session_state.herd["ID"].tolist() if sid != edit_target]
+                    curr_mother = target_data.get("الأم", "")
+                    m_idx = possible_mothers.index(curr_mother) if curr_mother in possible_mothers else 0
+                    new_mother = st.selectbox("الأم (اختياري)", possible_mothers, index=m_idx, format_func=lambda x: "بدون أم مسجلة" if not x else format_sheep_label(x))
+                    
+                    new_img = st.file_uploader("تحديث الصورة (اتركه فارغاً للاحتفاظ بالصورة الحالية)", type=['jpg', 'png'])
+                    
+                    if st.form_submit_button("💾 حفظ التعديلات"):
+                        if new_collar:
+                            st.session_state.herd.at[target_idx, "القلادة"] = new_collar
+                            st.session_state.herd.at[target_idx, "الجنس"] = new_gender
+                            st.session_state.herd.at[target_idx, "العمر"] = new_age
+                            st.session_state.herd.at[target_idx, "وحدة"] = new_unit
+                            st.session_state.herd.at[target_idx, "عدد الولادات"] = new_births
+                            st.session_state.herd.at[target_idx, "الأم"] = new_mother or ""
+                            
+                            if new_img:
+                                safe_delete_image(target_data.get("صورة"))
+                                st.session_state.herd.at[target_idx, "صورة"] = save_image(new_img)
+                                
+                            save_data(st.session_state.herd, DATA_FILE)
+                            st.success("تم تحديث البيانات بنجاح! ✅")
+                            st.rerun()
+                        else:
+                            st.error("الرجاء إدخال رقم/اسم القلادة.")
+                
+                st.divider()
+                # زر الحذف معزول ليجوه
                 if st.button("🗑️ حذف هذا الرأس نهائياً", type="primary"):
                     safe_delete_image(target_data.get("صورة"))
                     st.session_state.herd = st.session_state.herd.drop(target_idx).reset_index(drop=True)
@@ -361,11 +417,4 @@ with tab4:
                 try:
                     restored_data = json.load(uploaded_backup)
                     st.session_state.herd = pd.DataFrame(restored_data.get("herd", []))
-                    st.session_state.history = pd.DataFrame(restored_data.get("history", []))
-                    save_data(st.session_state.herd, DATA_FILE)
-                    save_data(st.session_state.history, HISTORY_FILE)
-                    st.success("تم استعادة البيانات بنجاح!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"خطأ في الملف: {e}")
-                
+                    st.session_state.history = pd.D
