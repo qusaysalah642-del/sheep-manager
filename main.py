@@ -1,20 +1,8 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
-import subprocess
-
-# ─── تثبيت المكتبات المطلوبة تلقائياً ──────────────────────────────────
-required = ['streamlit', 'pandas', 'Pillow']
-for pkg in required:
-    try:
-        __import__(pkg)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
-
-# ─── الاستيرادات ──────────────────────────────────────────────────────
 import streamlit as st
 import pandas as pd
 import json
+import os
 import uuid
 import ast
 import time
@@ -29,15 +17,37 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wide")
 
 # ─── تهيئة Session State ──────────────────────────────────────────────
-for key in ["success_msg", "toast", "editing_hist_id"]:
+for key in ["success_msg", "toast", "editing_hist_id", "splash_shown"]:
     if key not in st.session_state:
         st.session_state[key] = None
+
+# ─── شاشة ترحيب ──────────────────────────────────────────────────────
+if not st.session_state.splash_shown:
+    st.markdown("""
+    <div id="splash" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0b1f16; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; animation: fadeOut 2s ease-in forwards; animation-delay:1.5s;">
+        <div style="font-size:80px; background:#d3a15c; width:120px; height:120px; border-radius:30px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 40px rgba(211,161,92,0.3);">🐑</div>
+        <h1 style="color:white; font-size:32px; margin-top:20px;">Sheep Manager Pro</h1>
+        <p style="color:#93b3a1; font-size:16px;">إدارة القطيع، التطعيمات، والسجل الطبي</p>
+    </div>
+    <style>
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; pointer-events: none; }
+        }
+    </style>
+    <script>
+        setTimeout(() => {
+            document.getElementById('splash').style.display = 'none';
+        }, 3000);
+    </script>
+    """, unsafe_allow_html=True)
+    st.session_state.splash_shown = True
 
 if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
 
-# ─── إنشاء المجلدات تلقائياً ─────────────────────────────────────────
+# ─── إنشاء المجلدات ──────────────────────────────────────────────────
 for folder in ["images", "backups", "data"]:
     os.makedirs(folder, exist_ok=True)
 
@@ -58,7 +68,7 @@ def safe_literal_eval(value, default=None):
 
 def calculate_age(birth_date_str):
     if not birth_date_str:
-        return None, None
+        return "غير محدد", 0
     try:
         birth = datetime.strptime(birth_date_str, "%Y-%m-%d").date()
         today = date.today()
@@ -67,11 +77,11 @@ def calculate_age(birth_date_str):
         years = total_months // 12
         months = total_months % 12
         if years > 0:
-            return f"{years} سنة و {months} شهر", f"{years} سنة"
+            return f"{years} سنة و {months} شهر", years + (months/12)
         else:
-            return f"{months} شهر", f"{months} شهر"
+            return f"{months} شهر", months/12 if months else 0.1
     except Exception:
-        return None, None
+        return "غير محدد", 0
 
 def save_image_compressed(uploaded_file, max_size=(800, 800)):
     if uploaded_file is not None:
@@ -104,6 +114,8 @@ def load_data(file, columns):
                     if col in ["الأبناء", "اللقاحات", "الجرعات"]:
                         df[col] = "[]"
                     elif col == "تاريخ الميلاد":
+                        df[col] = ""
+                    elif col == "ملاحظات":
                         df[col] = ""
                     else:
                         df[col] = ""
@@ -142,7 +154,7 @@ def validate_sheep_data(data):
         try:
             datetime.strptime(birth, "%Y-%m-%d")
         except ValueError:
-            errors.append("صيغة تاريخ الميلاد غير صحيحة (YYYY-MM-DD)")
+            errors.append("صيغة تاريخ الميلاد غير صحيحة")
     return errors
 
 def get_collar_by_id(sheep_id):
@@ -165,7 +177,7 @@ def show_notification(message, type="info"):
 # ─── تحميل البيانات ──────────────────────────────────────────────────
 DATA_FILE = "data/herd_data.json"
 HISTORY_FILE = "data/medical_history.json"
-REQUIRED_COLS = ["ID", "القلادة", "الجنس", "تاريخ الميلاد", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء"]
+REQUIRED_COLS = ["ID", "القلادة", "الجنس", "تاريخ الميلاد", "عدد الولادات", "صورة", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء", "ملاحظات"]
 HISTORY_COLS = ["ID", "التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"]
 
 if "herd" not in st.session_state:
@@ -174,45 +186,179 @@ if "history" not in st.session_state:
     st.session_state.history = load_data(HISTORY_FILE, HISTORY_COLS)
 
 auto_backup()
-# ─── CSS ──────────────────────────────────────────────────────────────
+# ─── CSS مع أنيميشن وتحسين البطاقات ─────────────────────────────────
 st.markdown("""
 <style>
     body { direction: rtl; }
     .stApp { background: #0b1f16; color: #eef6f0; }
-    .stButton > button { background: #4c9a6a; color: white; border-radius: 10px; }
-    .stTabs [data-baseweb="tab"] { background: #123326; color: #93b3a1; border-radius: 20px; padding: 8px 16px; }
-    .stTabs [aria-selected="true"] { background: #4c9a6a !important; color: white !important; }
-    [data-testid="stExpander"] { background: #123326; border-radius: 14px; }
-    .edit-mode { background: #1a3a2a; padding: 15px; border-radius: 10px; border: 1px solid #4c9a6a; }
+    
+    /* أنيميشن للحقول */
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] > div {
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
+        background: #0b1f16 !important;
+        color: #eef6f0 !important;
+    }
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {
+        border-color: #4c9a6a !important;
+        box-shadow: 0 0 15px rgba(76,154,106,0.2) !important;
+        transform: scale(1.02);
+    }
+    
+    /* أنيميشن للأزرار */
+    .stButton > button {
+        background: linear-gradient(135deg, #4c9a6a 0%, #2f6b48 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 0;
+        width: 100%;
+        transition: all 0.3s ease;
+        font-weight: 700;
+    }
+    .stButton > button:hover {
+        transform: scale(1.05) translateY(-2px);
+        box-shadow: 0 8px 25px rgba(76,154,106,0.3);
+    }
+    .stButton > button:active {
+        transform: scale(0.95);
+    }
+    
+    /* أنيميشن للبطاقات */
+    [data-testid="stExpander"] {
+        background: #123326;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        transition: all 0.3s ease;
+    }
+    [data-testid="stExpander"]:hover {
+        border-color: #4c9a6a;
+        transform: translateX(-3px);
+        box-shadow: 0 4px 20px rgba(76,154,106,0.1);
+    }
+    
+    /* أنيميشن للتبويبات */
+    .stTabs [data-baseweb="tab"] {
+        background: #123326;
+        color: #93b3a1;
+        border-radius: 20px;
+        padding: 8px 16px;
+        transition: all 0.3s ease;
+        border: 1px solid transparent;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #1a4a3a;
+        transform: translateY(-2px);
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #4c9a6a 0%, #2f6b48 100%) !important;
+        color: white !important;
+        border-color: #4c9a6a !important;
+        box-shadow: 0 4px 15px rgba(76,154,106,0.3);
+    }
+    
+    /* أنيميشن للصورة */
+    .stImage img {
+        transition: all 0.5s ease;
+        border-radius: 10px;
+    }
+    .stImage img:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    
+    .edit-mode {
+        background: #1a3a2a;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #4c9a6a;
+        animation: slideIn 0.5s ease;
+    }
+    @keyframes slideIn {
+        0% { opacity: 0; transform: translateX(-20px); }
+        100% { opacity: 1; transform: translateX(0); }
+    }
+    
+    /* ─── بطاقات الإحصائيات الأفقية ─── */
+    .stats-container {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        justify-content: space-around;
+        margin-bottom: 20px;
+    }
+    .stat-card {
+        background: #123326;
+        border-radius: 16px;
+        padding: 18px 25px;
+        flex: 1;
+        min-width: 150px;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.06);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        border-color: #4c9a6a;
+        box-shadow: 0 8px 30px rgba(76,154,106,0.15);
+    }
+    .stat-icon {
+        font-size: 28px;
+        display: block;
+        margin-bottom: 5px;
+    }
+    .stat-number {
+        font-size: 32px;
+        font-weight: 800;
+        color: white;
+        line-height: 1.2;
+    }
+    .stat-label {
+        font-size: 14px;
+        color: #93b3a1;
+        margin-top: 4px;
+    }
+    .stat-card.green .stat-number { color: #4c9a6a; }
+    .stat-card.blue .stat-number { color: #4a90d9; }
+    .stat-card.pink .stat-number { color: #e87a7a; }
+    .stat-card.gold .stat-number { color: #d3a15c; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─── الهيدر ──────────────────────────────────────────────────────────
 st.markdown("""
-<div style="display:flex; align-items:center; gap:15px; background:#123326; padding:20px; border-radius:18px; margin-bottom:20px;">
-    <div style="font-size:40px; background:#d3a15c; width:60px; height:60px; border-radius:15px; display:flex; align-items:center; justify-content:center;">🐑</div>
+<div style="display:flex; align-items:center; gap:15px; background:#123326; padding:20px; border-radius:18px; margin-bottom:20px; animation: fadeIn 0.8s ease;">
+    <div style="font-size:40px; background:#d3a15c; width:60px; height:60px; border-radius:15px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(211,161,92,0.2);">🐑</div>
     <div>
         <h1 style="margin:0; color:white;">Sheep Manager Pro</h1>
         <p style="margin:0; color:#93b3a1;">إدارة القطيع، التطعيمات، والسجل الطبي</p>
     </div>
 </div>
+<style>
+    @keyframes fadeIn {
+        0% { opacity: 0; transform: translateY(-20px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+</style>
 """, unsafe_allow_html=True)
 
 if st.session_state.success_msg:
     st.success(st.session_state.success_msg)
     st.session_state.success_msg = None
 
-# ─── تعريف خيارات العلاج حسب نوع الإجراء (مركزية) ──────────────────────
+# ─── تعريف خيارات العلاج ────────────────────────────────────────────
 TREATMENT_OPTS = {
     'تطعيم': ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري'],
     'جرعة طفيلية': ['جرعة كبدية', 'جرعة معوية'],
     'تغطيس': ['تغطيس شامل']
 }
 
-# ─── الأقسام الرئيسية (تم حذف الإحصائيات) ────────────────────────────
+# ─── الأقسام الرئيسية ──────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء طبي", "📋 السجل", "➕ إدارة النظام"])
 
-# ─── 1. القطيع ───
+# ─── 1. القطيع (مع بطاقات إحصائيات أفقية) ───
 with tab1:
     st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
@@ -222,41 +368,59 @@ with tab1:
         females = len(df[df["الجنس"].isin(["أنثى", "أنثى صغيرة"])])
         young = len(df[df["الجنس"].str.contains("صغير", na=False)])
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🐑 العدد الكلي", total)
-        col2.metric("♂️ ذكور", males)
-        col3.metric("♀️ إناث", females)
-        col4.metric("👶 صغار", young)
+        # عرض البطاقات الأفقية
+        st.markdown(f"""
+        <div class="stats-container">
+            <div class="stat-card green">
+                <span class="stat-icon">🐑</span>
+                <div class="stat-number">{total}</div>
+                <div class="stat-label">العدد الكلي</div>
+            </div>
+            <div class="stat-card blue">
+                <span class="stat-icon">♂️</span>
+                <div class="stat-number">{males}</div>
+                <div class="stat-label">ذكور</div>
+            </div>
+            <div class="stat-card pink">
+                <span class="stat-icon">♀️</span>
+                <div class="stat-number">{females}</div>
+                <div class="stat-label">إناث</div>
+            </div>
+            <div class="stat-card gold">
+                <span class="stat-icon">👶</span>
+                <div class="stat-number">{young}</div>
+                <div class="stat-label">صغار</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        search_term = st.text_input("🔍 بحث", placeholder="ابحث بالقلادة...")
+        search_term = st.text_input("🔍 بحث بالقلادة", placeholder="اكتب للبحث...")
         filtered_df = df.copy()
         if search_term:
             filtered_df = filtered_df[filtered_df["القلادة"].str.contains(search_term, case=False, na=False)]
 
-        for _, row in filtered_df.iterrows():
-            birth = row.get("تاريخ الميلاد", "")
-            age_str, _ = calculate_age(birth)
-            age_display = age_str if age_str else "غير محدد"
+        if filtered_df.empty:
+            st.info("لا توجد نتائج")
+        else:
+            for _, row in filtered_df.iterrows():
+                birth = row.get("تاريخ الميلاد", "")
+                age_str, _ = calculate_age(birth)
 
-            with st.expander(f"🏷️ {row['القلادة']} - {row['الجنس']}"):
-                col_img, col_info = st.columns([1, 2])
-                with col_img:
-                    if row.get('صورة') and os.path.exists(row['صورة']):
-                        st.image(row['صورة'], width=150)
-                with col_info:
-                    st.write(f"**العمر:** {age_display}")
-                    st.write(f"**عدد الولادات:** {row.get('عدد الولادات', 0)}")
-                    if row.get('الأم'):
-                        st.write(f"**الأم:** {get_collar_by_id(row['الأم'])}")
-                    if row.get('الأبناء'):
-                        kids = safe_literal_eval(row['الأبناء'])
-                        if kids:
-                            kids_names = [get_collar_by_id(k) for k in kids if k]
-                            st.write(f"**الأبناء:** {', '.join(kids_names) if kids_names else 'لا يوجد'}")
+                with st.expander(f"🏷️ {row['القلادة']} - {row['الجنس']}"):
+                    col_img, col_info = st.columns([1, 2])
+                    with col_img:
+                        if row.get('صورة') and os.path.exists(row['صورة']):
+                            st.image(row['صورة'], width=150)
+                    with col_info:
+                        st.write(f"**العمر:** {age_str}")
+                        st.write(f"**عدد الولادات:** {row.get('عدد الولادات', 0)}")
+                        if row.get('الأم'):
+                            st.write(f"**الأم:** {get_collar_by_id(row['الأم'])}")
+                        if row.get('ملاحظات'):
+                            st.write(f"**📝 ملاحظات:** {row['ملاحظات']}")
     else:
         st.info("القطيع فارغ.")
-
-# ─── 2. إجراء طبي ───
+        # ─── 2. إجراء طبي ───
 with tab2:
     st.subheader("💉 تسجيل إجراء طبي")
     if not st.session_state.herd.empty:
@@ -264,8 +428,6 @@ with tab2:
         selected = st.multiselect("اختر الأغنام:", herd_ids, format_func=format_sheep_label)
         
         action = st.radio("النوع:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True)
-        
-        # العلاج يعتمد على نوع الإجراء المختار
         available_treatments = TREATMENT_OPTS.get(action, [])
         treatment = st.selectbox("العلاج:", available_treatments)
         
@@ -291,7 +453,8 @@ with tab2:
                 st.warning("اختر رأساً واحداً على الأقل.")
     else:
         st.warning("أضف أغناماً أولاً.")
-        # ─── 3. السجل الطبي (مع تعديل مباشر وتصفية العلاج) ───
+
+# ─── 3. السجل الطبي ───
 with tab3:
     st.subheader("📋 السجل الطبي")
     if not st.session_state.history.empty:
@@ -302,11 +465,9 @@ with tab3:
 
             with st.expander(f"🗓️ {row['التاريخ']} - {row['الإجراء']} ({row['العلاج']})", expanded=is_editing):
                 if is_editing:
-                    # ─── نموذج التعديل ───
                     st.markdown('<div class="edit-mode">', unsafe_allow_html=True)
                     st.markdown("#### ✏️ تعديل السجل")
                     
-                    # استخراج القيم الحالية
                     try:
                         curr_date = datetime.strptime(str(row["التاريخ"]), "%Y-%m-%d").date()
                     except:
@@ -315,10 +476,7 @@ with tab3:
                     curr_action = row.get("الإجراء", "تطعيم")
                     curr_treatment = row.get("العلاج", "")
                     
-                    # مفتاح فريد للـ radio
                     radio_key = f"action_radio_{row['ID']}"
-                    
-                    # الـ radio خارج الـ form (للتحديث المباشر)
                     new_action = st.radio(
                         "نوع الإجراء:",
                         ["تطعيم", "جرعة طفيلية", "تغطيس"],
@@ -327,24 +485,15 @@ with tab3:
                         key=radio_key
                     )
                     
-                    # الحصول على خيارات العلاج المناسبة بناءً على الـ radio الحالي
                     available_treatments = TREATMENT_OPTS.get(new_action, [])
-                    
-                    # تعيين الفهرس المناسب للعلاج الحالي
                     if curr_treatment in available_treatments:
                         t_idx = available_treatments.index(curr_treatment)
                     else:
                         t_idx = 0
                     
-                    # بداية الـ form
                     with st.form(key=f"edit_form_{row['ID']}"):
                         new_date = st.date_input("التاريخ:", value=curr_date)
-                        
-                        new_treatment = st.selectbox(
-                            "العلاج:",
-                            available_treatments,
-                            index=t_idx
-                        )
+                        new_treatment = st.selectbox("العلاج:", available_treatments, index=t_idx)
 
                         herd_ids = st.session_state.herd["ID"].tolist()
                         saved_collars = [c.strip() for c in str(row['الأغنام']).split(",")]
@@ -386,7 +535,6 @@ with tab3:
                                 st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    # ─── عرض السجل العادي ───
                     st.write(f"**الأغنام:** {row['الأغنام']}")
                     if row.get('صورة') and os.path.exists(row['صورة']):
                         st.image(row['صورة'], width=150)
@@ -417,6 +565,7 @@ with tab4:
             births = st.number_input("عدد الولادات", min_value=0)
             mother = st.selectbox("الأم", [None] + st.session_state.herd["ID"].tolist(),
                                   format_func=lambda x: "بدون" if x is None else format_sheep_label(x))
+            notes = st.text_area("ملاحظات", placeholder="أي ملاحظات إضافية...")
             img = st.file_uploader("صورة", type=['jpg','png'])
             if st.form_submit_button("➕ إضافة"):
                 if collar:
@@ -436,6 +585,7 @@ with tab4:
                             "عدد الولادات": births,
                             "الأم": mother or "",
                             "الأبناء": "[]",
+                            "ملاحظات": notes,
                             "صورة": save_image_compressed(img),
                             "اللقاحات": "[]",
                             "الجرعات": "[]",
@@ -476,6 +626,7 @@ with tab4:
                     new_mother = st.selectbox("الأم", [None] + st.session_state.herd["ID"].tolist(),
                                               index=([None] + st.session_state.herd["ID"].tolist()).index(row.get("الأم")) if row.get("الأم") in [None] + st.session_state.herd["ID"].tolist() else 0,
                                               format_func=lambda x: "بدون" if x is None else format_sheep_label(x))
+                    new_notes = st.text_area("ملاحظات", value=row.get("ملاحظات", ""))
                     new_img = st.file_uploader("تحديث الصورة", type=['jpg','png'])
                     if st.form_submit_button("💾 حفظ"):
                         st.session_state.herd.at[idx, "القلادة"] = new_collar
@@ -483,6 +634,7 @@ with tab4:
                         st.session_state.herd.at[idx, "تاريخ الميلاد"] = new_birth.strftime("%Y-%m-%d") if new_birth else ""
                         st.session_state.herd.at[idx, "عدد الولادات"] = new_births
                         st.session_state.herd.at[idx, "الأم"] = new_mother or ""
+                        st.session_state.herd.at[idx, "ملاحظات"] = new_notes
                         if new_img:
                             safe_delete_image(row.get("صورة"))
                             st.session_state.herd.at[idx, "صورة"] = save_image_compressed(new_img)
