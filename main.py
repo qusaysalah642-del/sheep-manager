@@ -9,7 +9,7 @@ from datetime import datetime
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wide")
 
-# نظام الألوان والخطوط (Design tokens)
+# نظام الألوان والخطوط
 C_BG_DEEP = "#0b1f16"
 C_BG_PANEL = "#123326"
 C_BG_PANEL_2 = "#16402f"
@@ -99,10 +99,6 @@ st.markdown(f"""
     .stButton > button[kind="primary"] {{
         background: linear-gradient(135deg, {C_DANGER} 0%, #b8443a 100%);
     }}
-    .stFormSubmitButton > button {{
-        background: linear-gradient(135deg, {C_AMBER} 0%, {C_AMBER_DARK} 100%) !important;
-        color: #24170a !important; border: none; border-radius: 10px; font-weight: 800;
-    }}
 
     .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] > div {{
         background: {C_BG_DEEP} !important;
@@ -184,8 +180,8 @@ def safe_delete_image(path):
     if path and isinstance(path, str) and os.path.exists(path):
         try:
             os.remove(path)
-        except OSError as e:
-            st.warning(f"⚠️ تعذر حذف ملف الصورة: {e}")
+        except OSError:
+            pass
 
 
 def safe_literal_eval(value, default=None):
@@ -194,16 +190,7 @@ def safe_literal_eval(value, default=None):
     try:
         result = ast.literal_eval(value)
         return result if isinstance(result, list) else default
-    except (ValueError, SyntaxError, TypeError):
-        return default
-
-
-def safe_int(value, default=0):
-    try:
-        if value is None or value == "":
-            return default
-        return int(float(value))
-    except (ValueError, TypeError):
+    except:
         return default
 
 
@@ -227,22 +214,20 @@ def load_data(file, columns):
                 else:
                     df[col] = ""
         return df
-    except (json.JSONDecodeError, ValueError, OSError) as e:
-        st.error(f"⚠️ تعذرت قراءة ملف البيانات ({file}): {e}")
+    except:
         return pd.DataFrame(columns=columns)
 
 
 def save_data(df, file):
     try:
         df.to_json(file, orient="records", force_ascii=False, indent=4)
-    except OSError as e:
-        st.error(f"⚠️ فشل حفظ البيانات في {file}: {e}")
+    except:
+        pass
 
 
 def migrate_relations_to_ids(df):
     if df.empty:
         return df
-
     id_set = set(df["ID"].astype(str))
     collar_to_id = {}
     for _, r in df.iterrows():
@@ -342,9 +327,10 @@ with st.sidebar:
     _hist_snap = st.session_state.history
     st.markdown(f'<p class="muted-note">📋 عدد الإجراءات المسجلة: <b>{len(_hist_snap)}</b></p>', unsafe_allow_html=True)
 
-# ─── واجهة التطبيق ─────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "⚙️ إدارة"])
+# ─── التبويبات الرئيسية ────────────────────────────────────────────────────
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "⚙️ إدارة", "💾 النسخة الاحتياطية"])
 
+# ─── تبويب القطيع ───────────────────────────────────────────────────────────
 with tab1:
     st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
@@ -367,7 +353,7 @@ with tab1:
             with st.container(border=True):
                 st.metric("👶 صغار", young)
     else:
-        st.info("لا توجد أغنام مسجلة بعد. أضف رأساً جديداً من تبويب «إدارة».")
+        st.info("لا توجد أغنام مسجلة بعد.")
 
     st.divider()
 
@@ -400,6 +386,7 @@ with tab1:
                         )
                         st.markdown(f'<p class="muted-note"><b>👶 الأبناء:</b></p>{kids_html}', unsafe_allow_html=True)
 
+# ─── تبويب إجراء ────────────────────────────────────────────────────────────
 with tab2:
     st.subheader("💉 تسجيل إجراء طبي")
     if not st.session_state.herd.empty:
@@ -414,8 +401,8 @@ with tab2:
                 else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
             )
             treatment = st.selectbox("العلاج:", tr_opts)
-            date = str(st.date_input("التاريخ:", key="hist_date"))
-            img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'], key="hist_img")
+            date = str(st.date_input("التاريخ:"))
+            img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'])
             if st.button("💾 حفظ الإجراء"):
                 if not selected_ids:
                     st.warning("⚠️ الرجاء اختيار رأس واحد على الأقل قبل الحفظ.")
@@ -437,6 +424,7 @@ with tab2:
     else:
         st.warning("يجب إضافة أغنام أولاً.")
 
+# ─── تبويب السجل ────────────────────────────────────────────────────────────
 with tab3:
     st.subheader("📋 السجل الطبي")
     if not st.session_state.history.empty:
@@ -459,7 +447,6 @@ with tab3:
 
                 with st.form(f"edit_hist_{idx}"):
                     new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
-
                     curr_treat = row['العلاج']
                     tr_idx = tr_opts.index(curr_treat) if curr_treat in tr_opts else 0
                     new_treat = st.selectbox("العلاج", tr_opts, index=tr_idx, key=f"t_{idx}")
@@ -491,25 +478,37 @@ with tab3:
     else:
         st.info("لا يوجد سجل طبي بعد.")
 
-
 # ─── تبويب الإدارة ─────────────────────────────────────────────────────────
 with tab4:
     st.header("⚙️ لوحة الإدارة")
     
-    admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs(
-        ["➕ إضافة", "✏️ تعديل", "🗑️ حذف", "💾 النسخة الاحتياطية"]
-    )
+    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["➕ إضافة", "✏️ تعديل", "🗑️ حذف"])
 
-    # ─── 1. تبويب الإضافة ───
+    # ─── الإضافة ───
     with admin_tab1:
         st.subheader("➕ إضافة رأس جديد للقطيع")
         
         with st.container(border=True):
             col1, col2 = st.columns(2)
             with col1:
-                name = st.text_input("رقم القلادة 🏷️", placeholder="مثلاً: 4521", key="add_name")
-                gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"], key="add_gender")
+                name = st.text_input("رقم القلادة 🏷️", placeholder="مثلاً: 4521")
+                gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
             with col2:
-                age = st.number_input("العمر", min_value=0, step=1, key="add_age")
-                unit = st.selectbox("وحدة العمر", ["شهر", "سنة"], key="add_unit")
-                
+                age = st.number_input("العمر", min_value=0, step=1)
+                unit = st.selectbox("وحدة العمر", ["شهر", "سنة"])
+                births = st.number_input("عدد الولادات", min_value=0, step=1, value=0)
+
+            mother_id = st.selectbox(
+                "الأم (اختياري)",
+                options=[""] + st.session_state.herd["ID"].tolist(),
+                format_func=lambda x: "لا يوجد" if x == "" else format_sheep_label(x)
+            )
+
+            uploaded_file = st.file_uploader("صورة للرأس", type=['jpg', 'png'])
+            
+            if st.button("✅ حفظ الرأس الجديد"):
+                if not name:
+                    st.warning("⚠️ يجب إدخال رقم القلادة.")
+                else:
+                    new_id = str(uuid.uuid4())
+    
