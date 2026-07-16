@@ -337,7 +337,6 @@ with tab4:
                     
                     c3, c4, c5 = st.columns(3)
                     
-                    # معالجة آمنة للأرقام في حال كانت القيمة فارغة أو NaN
                     curr_age = target_data.get("العمر", 0)
                     safe_age = int(curr_age) if pd.notna(curr_age) and str(curr_age).strip() != "" else 0
                     new_age = c3.number_input("العمر", min_value=0, value=safe_age)
@@ -351,7 +350,6 @@ with tab4:
                     safe_births = int(curr_births) if pd.notna(curr_births) and str(curr_births).strip() != "" else 0
                     new_births = c5.number_input("عدد الولادات", min_value=0, value=safe_births)
                     
-                    # اختيار الأم (مع استبعاد الرأس نفسه من القائمة)
                     possible_mothers = [None] + [sid for sid in st.session_state.herd["ID"].tolist() if sid != edit_target]
                     curr_mother = target_data.get("الأم", "")
                     m_idx = possible_mothers.index(curr_mother) if curr_mother in possible_mothers else 0
@@ -388,7 +386,7 @@ with tab4:
         else:
             st.info("القطيع فارغ.")
 
-        with mng_tab3:
+    with mng_tab3:
         st.markdown("### 📥 تصدير البيانات (Backup)")
         st.write("قم بتنزيل نسخة من بياناتك الحالية للاحتفاظ بها في مكان آمن.")
         
@@ -423,16 +421,3 @@ with tab4:
                     st.rerun()
                 except Exception as e:
                     st.error(f"خطأ في الملف: {e}")
-                    
-        
-        st.divider()
-        st.markdown("### 📤 استيراد البيانات (Restore)")
-        st.warning("⚠️ تنبيه: استيراد ملف سيؤدي إلى مسح جميع البيانات الحالية واستبدالها ببيانات الملف المرفوع.")
-        uploaded_backup = st.file_uploader("ارفع ملف النسخة الاحتياطية (.json)", type=["json"])
-        
-        if uploaded_backup:
-            if st.button("🔄 تأكيد استيراد البيانات", type="primary"):
-                try:
-                    restored_data = json.load(uploaded_backup)
-                    st.session_state.herd = pd.DataFrame(restored_data.get("herd", []))
-                    st.session_state.history = pd.DataFrame(restored_data.get("history", [
