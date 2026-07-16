@@ -98,8 +98,51 @@ def save_data(df, file):
         st.error(f"⚠️ فشل حفظ البيانات في {file}: {e}")
 
 
+def migrate_relations_to_ids(df):
+    """
+    ترحيل لمرة واحدة: بعض البيانات القديمة كانت تخزّن حقلي 'الأم' و'الأبناء'
+    باسم القلادة (نص) بدلاً من الـ ID الثابت. هذه الدالة تحوّل أي قيمة قديمة
+    من اسم قلادة إلى الـ ID المطابق لها بالقطيع الحالي، وتترك القيم المتوافقة
+    مع الـ IDs كما هي (فتكون الدالة آمنة الاستدعاء أكثر من مرة).
+    """
+    if df.empty:
+        return df
+
+    id_set = set(df["ID"].astype(str))
+    collar_to_id = {}
+    for _, r in df.iterrows():
+        collar_to_id.setdefault(r["القلادة"], r["ID"])
+
+    def resolve_one(value):
+        if not value:
+            return ""
+        if value in id_set:
+            return value
+        if value in collar_to_id:
+            return collar_to_id[value]
+        return ""  # قيمة قديمة ما نقدر نطابقها (رأس محذوف فعلاً مثلاً)
+
+    def resolve_list(value):
+        kids = safe_literal_eval(value)
+        resolved = []
+        for k in kids:
+            if k in id_set:
+                resolved.append(k)
+            elif k in collar_to_id:
+                resolved.append(collar_to_id[k])
+            # نتجاهل أي قيمة ما نقدر نطابقها بدل إظهار "(محذوف)" بدون داعي
+        return str(resolved)
+
+    df["الأم"] = df["الأم"].apply(resolve_one)
+    df["الأبناء"] = df["الأبناء"].apply(resolve_list)
+    return df
+
+
 if "herd" not in st.session_state:
-    st.session_state.herd = load_data(DATA_FILE, REQUIRED_COLS)
+    _herd = load_data(DATA_FILE, REQUIRED_COLS)
+    _herd = migrate_relations_to_ids(_herd)
+    st.session_state.herd = _herd
+    save_data(st.session_state.herd, DATA_FILE)  # حفظ نتيجة الترحيل فوراً على القرص
 if "history" not in st.session_state:
     st.session_state.history = load_data(HISTORY_FILE, HISTORY_COLS)
 
@@ -407,20 +450,4 @@ with tab4:
                             st.session_state.herd.at[idx, "صورة"] = save_image(new_img)
 
                         save_data(st.session_state.herd, DATA_FILE)
-                        st.session_state.toast = "تم التعديل بنجاح! 📝"
-                        st.rerun()
-
-            if st.button("حذف الرأس نهائياً ⚠️", type="primary"):
-                # نستخدم بيانات sheep_row الأصلية (المحفوظة فعلياً) وليس أي تعديل غير محفوظ بالفورم
-                original_mother_id = sheep_row.get("الأم", "")
-                if original_mother_id:
-                    remove_kid_from_mother(original_mother_id, selected_edit_id)
-
-                img_to_del = st.session_state.herd.at[idx, "صورة"]
-                safe_delete_image(img_to_del)
-
-                st.session_state.herd = st.session_state.herd.drop(idx).reset_index(drop=True)
-                save_data(st.session_state.herd, DATA_FILE)
-                st.session_state.toast = "تم الحذف بنجاح! 🗑️"
-                st.rerun()
-                
+                        st.session_state.toas
