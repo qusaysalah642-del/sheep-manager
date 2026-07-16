@@ -9,7 +9,7 @@ import ast
 # ─── إعداد الصفحة ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Sheep Manager Pro", layout="wide")
 
-# تم ضبط لون الخلفية الأساسي إلى الأخضر الداكن
+# الألوان
 C_PRIMARY = "#2e7d32"
 C_BG = "#102A1F" 
 
@@ -21,7 +21,7 @@ if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
 
-# أكواد CSS مخصصة لإصلاح الواجهة ودعم اللغة العربية (RTL) بشكل كامل على الهواتف
+# أكواد CSS مخصصة لإصلاح الواجهة ودعم اللغة العربية (RTL)
 st.markdown(f"""
 <style>
     .stApp {{ background-color: {C_BG}; color: #e8f5e9; direction: rtl; }}
@@ -75,7 +75,6 @@ if "history" not in st.session_state: st.session_state.history = load_data(HISTO
 # ─── واجهة التطبيق ─────────────────────────────────────────────────────────
 st.title("🐑 Sheep Manager Pro")
 
-# تم إعادة تبويب الإعدادات المفقود
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "➕ إدارة", "⚙️ الإعدادات"])
 
 with tab1:
@@ -218,7 +217,6 @@ with tab4:
 
     st.divider()
     
-    # قسم التعديل أصبح خارج القائمة المنسدلة لضمان عمله بشكل سليم
     st.subheader("✏️ تعديل / حذف رأس موجود")
     if not st.session_state.herd.empty:
         selected_edit_collar = st.selectbox("اختر الرأس لتعديله:", st.session_state.herd["القلادة"].tolist())
@@ -307,9 +305,42 @@ with tab5:
     with col_d1:
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, "rb") as f:
-                st.download_button("📥 تحميل بيانات القطيع", f, file_name="herd_data.json", mime="application/json")
+                st.download_button("📥 تحميل بيانات القطيع (نسخة احتياطية)", f, file_name="herd_data.json", mime="application/json")
     with col_d2:
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, "rb") as f:
-                st.download_button("📥 تحميل السجل الطبي", f, file_name="medical_history.json", mime="application/json")
-                
+                st.download_button("📥 تحميل السجل الطبي (نسخة احتياطية)", f, file_name="medical_history.json", mime="application/json")
+    
+    st.divider()
+    
+    st.subheader("🔄 استعادة البيانات")
+    st.info("ملاحظة: استعادة ملف جديد ستقوم بمسح البيانات الحالية واستبدالها ببيانات الملف المرفوع.")
+    
+    col_u1, col_u2 = st.columns(2)
+    
+    with col_u1:
+        uploaded_herd = st.file_uploader("📂 رفع ملف بيانات القطيع (herd_data.json)", type=['json'])
+        if uploaded_herd is not None:
+            if st.button("استعادة بيانات القطيع ⚠️", type="primary"):
+                try:
+                    data = json.load(uploaded_herd)
+                    st.session_state.herd = pd.DataFrame(data)
+                    save_data(st.session_state.herd, DATA_FILE)
+                    st.session_state.toast = "تمت استعادة بيانات القطيع بنجاح! ✅"
+                    st.rerun()
+                except Exception as e:
+                    st.error("حدث خطأ أثناء قراءة الملف. يرجى التأكد من أنه ملف JSON صحيح.")
+                    
+    with col_u2:
+        uploaded_hist = st.file_uploader("📂 رفع ملف السجل الطبي (medical_history.json)", type=['json'])
+        if uploaded_hist is not None:
+            if st.button("استعادة السجل الطبي ⚠️", type="primary"):
+                try:
+                    data = json.load(uploaded_hist)
+                    st.session_state.history = pd.DataFrame(data)
+                    save_data(st.session_state.history, HISTORY_FILE)
+                    st.session_state.toast = "تمت استعادة السجل الطبي بنجاح! ✅"
+                    st.rerun()
+                except Exception as e:
+                    st.error("حدث خطأ أثناء قراءة الملف. يرجى التأكد من أنه ملف JSON صحيح.")
+                    
