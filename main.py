@@ -12,7 +12,6 @@ st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wid
 # نظام الألوان والخطوط
 C_BG_DEEP = "#0b1f16"
 C_BG_PANEL = "#123326"
-C_BG_PANEL_2 = "#16402f"
 C_BORDER = "rgba(255,255,255,0.08)"
 C_TEXT = "#eef6f0"
 C_TEXT_MUTED = "#93b3a1"
@@ -80,27 +79,18 @@ st.markdown(f"""
         border-radius: 14px !important;
         margin-bottom: 10px;
     }}
-    [data-testid="stExpander"] summary {{
-        font-weight: 700;
-        font-size: 15px;
-    }}
-    [data-testid="stVerticalBlockBorderWrapper"] {{
-        border-radius: 14px !important;
-    }}
 
     .stButton > button {{
         background: linear-gradient(135deg, {C_GREEN} 0%, {C_GREEN_DARK} 100%);
         color: white; border: none; border-radius: 10px; width: 100%;
         font-weight: 700; padding: 10px 0;
-        transition: filter 0.15s ease, transform 0.05s ease;
     }}
     .stButton > button:hover {{ filter: brightness(1.12); }}
-    .stButton > button:active {{ transform: scale(0.98); }}
     .stButton > button[kind="primary"] {{
         background: linear-gradient(135deg, {C_DANGER} 0%, #b8443a 100%);
     }}
 
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] > div {{
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div {{
         background: {C_BG_DEEP} !important;
         border: 1px solid {C_BORDER} !important;
         border-radius: 10px !important;
@@ -114,7 +104,6 @@ st.markdown(f"""
         padding: 10px 6px;
     }}
     [data-testid="stMetricValue"] {{ font-size: 22px !important; color: {C_AMBER} !important; font-weight: 800 !important; }}
-    [data-testid="stMetricLabel"] {{ font-size: 13px !important; color: {C_TEXT_MUTED} !important; }}
 
     .ear-tag {{
         display: inline-flex; align-items: center; gap: 8px;
@@ -123,11 +112,6 @@ st.markdown(f"""
         padding: 5px 14px 5px 10px;
         border-radius: 4px 14px 14px 4px;
         margin: 2px 4px 2px 0;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    }}
-    .ear-tag::before {{
-        content: ''; width: 7px; height: 7px; border-radius: 50%;
-        background: {C_BG_DEEP}; border: 2px solid rgba(0,0,0,0.2); flex-shrink: 0;
     }}
     .info-chip {{
         display: inline-flex; align-items: center; gap: 6px;
@@ -137,7 +121,6 @@ st.markdown(f"""
         padding: 4px 12px; border-radius: 999px; font-size: 13px;
         margin: 2px 4px 2px 0;
     }}
-    .chip-row {{ margin-top: 6px; margin-bottom: 4px; }}
     .muted-note {{ color: {C_TEXT_MUTED}; font-size: 13px; }}
 
     section[data-testid="stSidebar"] {{
@@ -330,7 +313,7 @@ with st.sidebar:
 # ─── التبويبات الرئيسية ────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 القطيع", "💉 إجراء", "📋 السجل", "⚙️ إدارة", "💾 النسخة الاحتياطية"])
 
-# ─── تبويب القطيع ───────────────────────────────────────────────────────────
+# ─── تبويب 1: القطيع ────────────────────────────────────────────────────────
 with tab1:
     st.subheader("📊 إحصائيات القطيع")
     df = st.session_state.herd
@@ -386,45 +369,44 @@ with tab1:
                         )
                         st.markdown(f'<p class="muted-note"><b>👶 الأبناء:</b></p>{kids_html}', unsafe_allow_html=True)
 
-# ─── تبويب إجراء ────────────────────────────────────────────────────────────
+# ─── تبويب 2: إجراء ─────────────────────────────────────────────────────────
 with tab2:
     st.subheader("💉 تسجيل إجراء طبي")
     if not st.session_state.herd.empty:
-        with st.container(border=True):
-            herd_ids = st.session_state.herd["ID"].tolist()
-            selected_ids = st.multiselect(
-                "اختر الأغنام:", herd_ids, format_func=format_sheep_label
-            )
-            action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True)
-            tr_opts = (
-                ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم"
-                else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
-            )
-            treatment = st.selectbox("العلاج:", tr_opts)
-            date = str(st.date_input("التاريخ:"))
-            img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'])
-            if st.button("💾 حفظ الإجراء"):
-                if not selected_ids:
-                    st.warning("⚠️ الرجاء اختيار رأس واحد على الأقل قبل الحفظ.")
-                else:
-                    selected_collars = [get_collar_by_id(sid) for sid in selected_ids]
-                    img_path = save_image(img_file)
-                    new_hist = pd.DataFrame([{
-                        "ID": str(uuid.uuid4()),
-                        "التاريخ": date,
-                        "الإجراء": action_type,
-                        "العلاج": treatment,
-                        "الأغنام": ", ".join(selected_collars),
-                        "صورة": img_path
-                    }])
-                    st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
-                    save_data(st.session_state.history, HISTORY_FILE)
-                    st.session_state.toast = "تمت إضافة الإجراء بنجاح! ✅"
-                    st.rerun()
+        herd_ids = st.session_state.herd["ID"].tolist()
+        selected_ids = st.multiselect(
+            "اختر الأغنام:", herd_ids, format_func=format_sheep_label, key="action_sheep"
+        )
+        action_type = st.radio("نوع الإجراء:", ["تطعيم", "جرعة طفيلية", "تغطيس"], horizontal=True, key="action_type")
+        tr_opts = (
+            ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية'] if action_type == "تطعيم"
+            else (['جرعة كبدية', 'جرعة معوية'] if action_type == "جرعة طفيلية" else ['تغطيس شامل'])
+        )
+        treatment = st.selectbox("العلاج:", tr_opts, key="action_treatment")
+        date = str(st.date_input("التاريخ:", key="action_date"))
+        img_file = st.file_uploader("صورة التوثيق (اختياري)", type=['jpg', 'png'], key="action_img")
+        if st.button("💾 حفظ الإجراء", key="action_save"):
+            if not selected_ids:
+                st.warning("⚠️ الرجاء اختيار رأس واحد على الأقل قبل الحفظ.")
+            else:
+                selected_collars = [get_collar_by_id(sid) for sid in selected_ids]
+                img_path = save_image(img_file)
+                new_hist = pd.DataFrame([{
+                    "ID": str(uuid.uuid4()),
+                    "التاريخ": date,
+                    "الإجراء": action_type,
+                    "العلاج": treatment,
+                    "الأغنام": ", ".join(selected_collars),
+                    "صورة": img_path
+                }])
+                st.session_state.history = pd.concat([st.session_state.history, new_hist], ignore_index=True)
+                save_data(st.session_state.history, HISTORY_FILE)
+                st.session_state.toast = "تمت إضافة الإجراء بنجاح! ✅"
+                st.rerun()
     else:
         st.warning("يجب إضافة أغنام أولاً.")
 
-# ─── تبويب السجل ────────────────────────────────────────────────────────────
+# ─── تبويب 3: السجل ─────────────────────────────────────────────────────────
 with tab3:
     st.subheader("📋 السجل الطبي")
     if not st.session_state.history.empty:
@@ -436,7 +418,7 @@ with tab3:
                 action_opts = ["تطعيم", "جرعة طفيلية", "تغطيس"]
                 curr_action = row['الإجراء']
                 act_idx = action_opts.index(curr_action) if curr_action in action_opts else 0
-                selected_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"a_{idx}")
+                selected_action = st.selectbox("الإجراء", action_opts, index=act_idx, key=f"hist_act_{idx}")
 
                 if selected_action == "تطعيم":
                     tr_opts = ['إيفومك', 'معوي/دموي', 'طاعون', 'جدري', 'حمى قلاعية']
@@ -445,18 +427,18 @@ with tab3:
                 else:
                     tr_opts = ['تغطيس شامل']
 
-                with st.form(f"edit_hist_{idx}"):
-                    new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"d_{idx}")
+                with st.form(f"edit_hist_form_{idx}"):
+                    new_date = st.date_input("التاريخ", value=pd.to_datetime(row['التاريخ']), key=f"hist_date_{idx}")
                     curr_treat = row['العلاج']
                     tr_idx = tr_opts.index(curr_treat) if curr_treat in tr_opts else 0
-                    new_treat = st.selectbox("العلاج", tr_opts, index=tr_idx, key=f"t_{idx}")
+                    new_treat = st.selectbox("العلاج", tr_opts, index=tr_idx, key=f"hist_treat_{idx}")
 
                     remove_hist_img = False
                     current_hist_img = row.get('صورة', "")
                     if current_hist_img and os.path.exists(current_hist_img):
-                        remove_hist_img = st.checkbox("🗑️ حذف الصورة الحالية", key=f"rm_img_h_{idx}")
+                        remove_hist_img = st.checkbox("🗑️ حذف الصورة الحالية", key=f"hist_rmimg_{idx}")
 
-                    new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"img_h_{idx}")
+                    new_img = st.file_uploader("تحديث صورة التوثيق", type=['jpg', 'png'], key=f"hist_imgupload_{idx}")
 
                     if st.form_submit_button("حفظ التعديلات"):
                         st.session_state.history.at[idx, "التاريخ"] = str(new_date)
@@ -478,7 +460,7 @@ with tab3:
     else:
         st.info("لا يوجد سجل طبي بعد.")
 
-# ─── تبويب الإدارة ─────────────────────────────────────────────────────────
+# ─── تبويب 4: الإدارة مع تبويبات داخلية ─────────────────────────────────────
 with tab4:
     st.header("⚙️ لوحة الإدارة")
     
@@ -491,24 +473,39 @@ with tab4:
         with st.container(border=True):
             col1, col2 = st.columns(2)
             with col1:
-                name = st.text_input("رقم القلادة 🏷️", placeholder="مثلاً: 4521")
-                gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"])
+                name = st.text_input("رقم القلادة 🏷️", placeholder="مثلاً: 4521", key="add_name")
+                gender = st.selectbox("الجنس", ["أنثى", "ذكر", "أنثى صغيرة", "ذكر صغير"], key="add_gender")
             with col2:
-                age = st.number_input("العمر", min_value=0, step=1)
-                unit = st.selectbox("وحدة العمر", ["شهر", "سنة"])
-                births = st.number_input("عدد الولادات", min_value=0, step=1, value=0)
+                age = st.number_input("العمر", min_value=0, step=1, key="add_age")
+                unit = st.selectbox("وحدة العمر", ["شهر", "سنة"], key="add_unit")
+                births = st.number_input("عدد الولادات", min_value=0, step=1, value=0, key="add_births")
 
             mother_id = st.selectbox(
                 "الأم (اختياري)",
                 options=[""] + st.session_state.herd["ID"].tolist(),
-                format_func=lambda x: "لا يوجد" if x == "" else format_sheep_label(x)
+                format_func=lambda x: "لا يوجد" if x == "" else format_sheep_label(x),
+                key="add_mother"
             )
 
-            uploaded_file = st.file_uploader("صورة للرأس", type=['jpg', 'png'])
+            uploaded_file = st.file_uploader("صورة للرأس", type=['jpg', 'png'], key="add_img")
             
-            if st.button("✅ حفظ الرأس الجديد"):
+            if st.button("✅ حفظ الرأس الجديد", key="add_btn"):
                 if not name:
                     st.warning("⚠️ يجب إدخال رقم القلادة.")
                 else:
                     new_id = str(uuid.uuid4())
-    
+                    img_path = save_image(uploaded_file)
+                    
+                    new_sheep = pd.DataFrame([{
+                        "ID": new_id,
+                        "القلادة": name,
+                        "الجنس": gender,
+                        "العمر": age,
+                        "وحدة": unit,
+                        "عدد الولادات": births,
+                        "صورة": img_path,
+                        "اللقاحات": "[]",
+                        "الجرعات": "[]",
+                        "آخر تغطيس": "",
+                        "الأم": mother_id if mother_id else "",
+          
