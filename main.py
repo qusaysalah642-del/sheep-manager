@@ -388,7 +388,7 @@ with tab4:
         else:
             st.info("القطيع فارغ.")
 
-    with mng_tab3:
+        with mng_tab3:
         st.markdown("### 📥 تصدير البيانات (Backup)")
         st.write("قم بتنزيل نسخة من بياناتك الحالية للاحتفاظ بها في مكان آمن.")
         
@@ -405,6 +405,25 @@ with tab4:
             file_name=f"SheepManager_Backup_{date_str}.json",
             mime="application/json"
         )
+        
+        st.divider()
+        st.markdown("### 📤 استيراد البيانات (Restore)")
+        st.warning("⚠️ تنبيه: استيراد ملف سيؤدي إلى مسح جميع البيانات الحالية واستبدالها ببيانات الملف المرفوع.")
+        uploaded_backup = st.file_uploader("ارفع ملف النسخة الاحتياطية (.json)", type=["json"])
+        
+        if uploaded_backup:
+            if st.button("🔄 تأكيد استيراد البيانات", type="primary"):
+                try:
+                    restored_data = json.load(uploaded_backup)
+                    st.session_state.herd = pd.DataFrame(restored_data.get("herd", []))
+                    st.session_state.history = pd.DataFrame(restored_data.get("history", []))
+                    save_data(st.session_state.herd, DATA_FILE)
+                    save_data(st.session_state.history, HISTORY_FILE)
+                    st.success("تم استعادة البيانات بنجاح!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"خطأ في الملف: {e}")
+                    
         
         st.divider()
         st.markdown("### 📤 استيراد البيانات (Restore)")
