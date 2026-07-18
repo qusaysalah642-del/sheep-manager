@@ -9,6 +9,8 @@ import time
 import logging
 from datetime import datetime, date
 from PIL import Image
+import io
+from supabase import create_client, Client
 
 # ─── إعداد التسجيل ──────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -20,6 +22,18 @@ st.set_page_config(page_title="Sheep Manager Pro", page_icon="🐑", layout="wid
 for key in ["success_msg", "toast", "editing_hist_id", "splash_shown", "selected_sheep"]:
     if key not in st.session_state:
         st.session_state[key] = None
+
+# ─── الاتصال بـ Supabase ──────────────────────────────────────────────
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+    SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", "sheep_images")  # اسم الـ Bucket
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    logging.info("تم الاتصال بـ Supabase بنجاح")
+except Exception as e:
+    st.error(f"فشل الاتصال بـ Supabase: {e}")
+    logging.error(f"فشل الاتصال بـ Supabase: {e}")
+    st.stop()
 
 # ─── شاشة ترحيب ──────────────────────────────────────────────────────
 if not st.session_state.splash_shown:
@@ -47,11 +61,74 @@ if st.session_state.toast:
     st.toast(st.session_state.toast)
     st.session_state.toast = None
 
-# ─── إنشاء المجلدات ──────────────────────────────────────────────────
-for folder in ["images", "backups", "data"]:
-    os.makedirs(folder, exist_ok=True)
+# ─── إنشاء المجلد المحلي للنسخ الاحتياطي فقط ──────────────────────────
+os.makedirs("backups", exist_ok=True)
 
-# ─── دوال مساعدة ──────────────────────────────────────────────────────
+# ─── دوال مساعدة للصور مع Supabase Storage ──────────────────────────
+
+def upload_image_to_supabase(image_file, folder="sheep"):
+    """رفع صورة إلى Supabase Storage وإرجاع الرابط العام"""
+    if image_file is None:
+        return ""
+    try:
+        # قراءة محتوى الصورة
+        image_data = image_file.read()
+        # إنشاء اسم فريد للملف
+        file_ext = image_file.name.split('.')[-1].lower()
+        if file_ext not in ['jpg', 'jpeg', 'png']:
+            file_ext = 'jpg'
+        file_name = f"{folder}/{uuid.uuid4()}.{file_ext}"
+        
+        # رفع الصورة إلى Supabase Storage
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            file_name, 
+            image_data,
+            {"content-type": image_file.type}
+        )
+        
+        # الحصول على الرابط العام
+        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(file_name)
+        logging.info(f"تم رفع الصورة: {public_url}")
+        return public_url
+    except Exception as e:
+        logging.error(f"خطأ في رفع الصورة: {e}")
+        return ""
+
+def upload_multiple_images_to_supabase(image_files, folder="sheep"):
+    """رفع عدة صور إلى Supabase Storage"""
+    urls = []
+    if image_files:
+        for file in image_files:
+            url = upload_image_to_supabase(file, folder)
+            if url:
+                urls.append(url)
+    return urls
+
+def delete_image_from_supabase(image_url):
+    """حذف صورة من Supabase Storage"""
+    if not image_url:
+        return
+    try:
+        # استخراج اسم الملف من الرابط
+        # الرابط يكون على شكل: https://xxxx.supabase.co/storage/v1/object/public/bucket_name/path/file.jpg
+        parts = image_url.split('/')
+        # البحث عن 'public' أو 'object' ثم أخذ المسار
+        for i, part in enumerate(parts):
+            if part == 'public':
+                # بعد public يأتي اسم الـ bucket ثم المسار
+                if i + 2 < len(parts):
+                    file_path = '/'.join(parts[i+2:])
+                    supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
+                    logging.info(f"تم حذف الصورة: {file_path}")
+                break
+    except Exception as e:
+        logging.error(f"خطأ في حذف الصورة: {e}")
+
+def safe_delete_images_from_supabase(image_urls):
+    """حذف عدة صور من Supabase Storage"""
+    if image_urls:
+        for url in image_urls:
+            delete_image_from_supabase(url)
 
 def safe_literal_eval(value, default=None):
     if default is None:
@@ -83,79 +160,52 @@ def calculate_age(birth_date_str):
     except Exception:
         return "غير محدد", 0
 
-def save_image_compressed(uploaded_file, max_size=(800, 800)):
-    if uploaded_file is not None:
-        try:
-            img = Image.open(uploaded_file)
-            img.thumbnail(max_size, Image.Resampling.LANCZOS)
-            path = f"images/{uuid.uuid4()}.jpg"
-            img.save(path, "JPEG", quality=85, optimize=True)
-            return path
-        except Exception:
-            return ""
-    return ""
-
-def save_multiple_images(uploaded_files, max_size=(800, 800)):
-    """حفظ عدة صور وإرجاع قائمة بالمسارات"""
-    paths = []
-    if uploaded_files:
-        for file in uploaded_files:
-            path = save_image_compressed(file, max_size)
-            if path:
-                paths.append(path)
-    return paths
-
-def safe_delete_image(path):
-    if path and os.path.exists(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-
-def safe_delete_images(paths):
-    """حذف عدة صور"""
-    if paths:
-        for path in paths:
-            safe_delete_image(path)
-
-def load_data(file, columns):
-    if not os.path.exists(file):
-        return pd.DataFrame(columns=columns)
+def load_data(table_name, columns):
+    """تحميل البيانات من جدول Supabase"""
     try:
-        with open(file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            df = pd.DataFrame(data)
-            for col in columns:
-                if col not in df.columns:
-                    if col in ["الأبناء", "اللقاحات", "الجرعات", "الصور"]:
-                        df[col] = "[]"
-                    elif col == "تاريخ الميلاد":
-                        df[col] = ""
-                    elif col == "ملاحظات":
-                        df[col] = ""
-                    else:
-                        df[col] = ""
-            return df
-    except Exception:
+        response = supabase.table(table_name).select("*").execute()
+        data = response.data
+        if not data:
+            return pd.DataFrame(columns=columns)
+        df = pd.DataFrame(data)
+        for col in columns:
+            if col not in df.columns:
+                if col in ["الأبناء", "اللقاحات", "الجرعات", "الصور"]:
+                    df[col] = "[]"
+                elif col == "تاريخ الميلاد":
+                    df[col] = ""
+                elif col == "ملاحظات":
+                    df[col] = ""
+                else:
+                    df[col] = ""
+        return df
+    except Exception as e:
+        logging.error(f"خطأ في تحميل البيانات من {table_name}: {e}")
         return pd.DataFrame(columns=columns)
 
-def save_data(df, file):
-    df.to_json(file, orient="records", force_ascii=False, indent=4)
+def save_data_to_supabase(df, table_name, id_column="ID"):
+    """حفظ البيانات في Supabase"""
+    try:
+        records = df.to_dict(orient="records")
+        for record in records:
+            record_id = record.get(id_column)
+            if record_id:
+                supabase.table(table_name).update(record).eq(id_column, record_id).execute()
+            else:
+                supabase.table(table_name).insert(record).execute()
+        logging.info(f"تم حفظ {len(records)} سجل في {table_name}")
+    except Exception as e:
+        logging.error(f"خطأ في حفظ البيانات في {table_name}: {e}")
+        raise
 
-def auto_backup():
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    backup_file = f"backups/auto_backup_{date_str}.json"
-    if not os.path.exists(backup_file):
-        try:
-            backup_dict = {
-                "herd": st.session_state.herd.to_dict(orient="records"),
-                "history": st.session_state.history.to_dict(orient="records"),
-                "timestamp": datetime.now().isoformat()
-            }
-            with open(backup_file, "w", encoding="utf-8") as f:
-                json.dump(backup_dict, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+def delete_record_from_supabase(table_name, id_column, record_id):
+    """حذف سجل من Supabase"""
+    try:
+        supabase.table(table_name).delete().eq(id_column, record_id).execute()
+        logging.info(f"تم حذف السجل {record_id} من {table_name}")
+    except Exception as e:
+        logging.error(f"خطأ في حذف السجل من {table_name}: {e}")
+        raise
 
 def validate_sheep_data(data):
     errors = []
@@ -190,16 +240,30 @@ def show_notification(message, type="info"):
     icons = {"success": "✅", "error": "❌", "warning": "⚠️", "info": "ℹ️"}
     st.session_state.toast = f"{icons.get(type, '')} {message}"
 
-# ─── تحميل البيانات ──────────────────────────────────────────────────
-DATA_FILE = "data/herd_data.json"
-HISTORY_FILE = "data/medical_history.json"
+# ─── تحميل البيانات من Supabase ────────────────────────────────────
 REQUIRED_COLS = ["ID", "القلادة", "الجنس", "تاريخ الميلاد", "عدد الولادات", "الصور", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء", "ملاحظات"]
 HISTORY_COLS = ["ID", "التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"]
 
 if "herd" not in st.session_state:
-    st.session_state.herd = load_data(DATA_FILE, REQUIRED_COLS)
+    st.session_state.herd = load_data("herd", REQUIRED_COLS)
 if "history" not in st.session_state:
-    st.session_state.history = load_data(HISTORY_FILE, HISTORY_COLS)
+    st.session_state.history = load_data("medical_history", HISTORY_COLS)
+
+# ─── نسخ احتياطي تلقائي ─────────────────────────────────────────────
+def auto_backup():
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    backup_file = f"backups/auto_backup_{date_str}.json"
+    if not os.path.exists(backup_file):
+        try:
+            backup_dict = {
+                "herd": st.session_state.herd.to_dict(orient="records"),
+                "history": st.session_state.history.to_dict(orient="records"),
+                "timestamp": datetime.now().isoformat()
+            }
+            with open(backup_file, "w", encoding="utf-8") as f:
+                json.dump(backup_dict, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
 auto_backup()
 # ─── CSS ──────────────────────────────────────────────────────────────
@@ -335,49 +399,6 @@ st.markdown("""
     .stat-card.blue .stat-number { color: #4a90d9; }
     .stat-card.pink .stat-number { color: #e87a7a; }
     .stat-card.gold .stat-number { color: #d3a15c; }
-    
-    /* عرض الصور في شبكة */
-    .images-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin: 10px 0;
-    }
-    .image-item {
-        position: relative;
-        display: inline-block;
-    }
-    .image-item img {
-        width: 120px;
-        height: 120px;
-        object-fit: cover;
-        border-radius: 10px;
-        border: 2px solid rgba(255,255,255,0.1);
-        transition: all 0.3s ease;
-    }
-    .image-item img:hover {
-        border-color: #4c9a6a;
-        transform: scale(1.05);
-    }
-    .delete-img-btn {
-        position: absolute;
-        top: -8px;
-        right: -8px;
-        background: #e2665a;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .delete-img-btn:hover {
-        transform: scale(1.2);
-        background: #d44a3a;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -463,8 +484,10 @@ with tab1:
                 with st.expander(f"🏷️ {row['القلادة']} - {row['الجنس']}"):
                     col_img, col_info = st.columns([1, 2])
                     with col_img:
-                        if images:
+                        if images and images[0]:
                             st.image(images[0], width=150)
+                        else:
+                            st.info("📷 لا توجد صورة")
                     with col_info:
                         st.write(f"**العمر:** {age_str}")
                         st.write(f"**عدد الولادات:** {row.get('عدد الولادات', 0)}")
@@ -488,13 +511,11 @@ with tab1:
                                 else:
                                     st.write("**الأبناء:** لا يوجد")
                         
-                        # عرض الصور المتعددة
                         if len(images) > 1:
                             st.write("**📸 صور إضافية:**")
                             cols = st.columns(min(len(images), 4))
-                            for i, img_path in enumerate(images[1:]):
-                                if os.path.exists(img_path):
-                                    cols[i % 4].image(img_path, width=100)
+                            for i, img_url in enumerate(images[1:]):
+                                cols[i % 4].image(img_url, width=100)
     else:
         st.info("القطيع فارغ.")
         # ─── 2. إجراء طبي ───
@@ -513,19 +534,25 @@ with tab2:
 
         if st.button("💾 حفظ"):
             if selected:
-                new = pd.DataFrame([{
-                    "ID": str(uuid.uuid4()),
+                new_id = str(uuid.uuid4())
+                image_url = upload_image_to_supabase(img, "medical") if img else ""
+                new_record = {
+                    "ID": new_id,
                     "التاريخ": date,
                     "الإجراء": action,
                     "العلاج": treatment,
                     "الأغنام": ", ".join([get_collar_by_id(s) for s in selected]),
-                    "صورة": save_image_compressed(img)
-                }])
-                st.session_state.history = pd.concat([st.session_state.history, new], ignore_index=True)
-                save_data(st.session_state.history, HISTORY_FILE)
-                show_notification("تم الحفظ!", "success")
-                time.sleep(0.5)
-                st.rerun()
+                    "صورة": image_url
+                }
+                try:
+                    supabase.table("medical_history").insert(new_record).execute()
+                    new_df = pd.DataFrame([new_record])
+                    st.session_state.history = pd.concat([st.session_state.history, new_df], ignore_index=True)
+                    show_notification("تم الحفظ!", "success")
+                    time.sleep(0.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"خطأ في الحفظ: {e}")
             else:
                 st.warning("اختر رأساً واحداً على الأقل.")
     else:
@@ -592,18 +619,28 @@ with tab3:
                         with col_btn1:
                             if st.form_submit_button("💾 حفظ التعديلات"):
                                 if new_selected:
-                                    st.session_state.history.at[idx, "التاريخ"] = str(new_date)
-                                    st.session_state.history.at[idx, "الإجراء"] = new_action
-                                    st.session_state.history.at[idx, "العلاج"] = new_treatment
-                                    st.session_state.history.at[idx, "الأغنام"] = ", ".join([get_collar_by_id(s) for s in new_selected])
+                                    updated_record = {
+                                        "التاريخ": str(new_date),
+                                        "الإجراء": new_action,
+                                        "العلاج": new_treatment,
+                                        "الأغنام": ", ".join([get_collar_by_id(s) for s in new_selected])
+                                    }
                                     if new_img:
-                                        safe_delete_image(row.get("صورة"))
-                                        st.session_state.history.at[idx, "صورة"] = save_image_compressed(new_img)
-                                    save_data(st.session_state.history, HISTORY_FILE)
-                                    st.session_state.editing_hist_id = None
-                                    show_notification("تم تحديث السجل!", "success")
-                                    time.sleep(0.5)
-                                    st.rerun()
+                                        # حذف الصورة القديمة من Storage
+                                        old_image = row.get("صورة")
+                                        if old_image:
+                                            delete_image_from_supabase(old_image)
+                                        updated_record["صورة"] = upload_image_to_supabase(new_img, "medical")
+                                    try:
+                                        supabase.table("medical_history").update(updated_record).eq("ID", row["ID"]).execute()
+                                        for key, value in updated_record.items():
+                                            st.session_state.history.at[idx, key] = value
+                                        st.session_state.editing_hist_id = None
+                                        show_notification("تم تحديث السجل!", "success")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"خطأ في التحديث: {e}")
                                 else:
                                     st.error("الرجاء اختيار رأس واحد على الأقل.")
                         with col_btn2:
@@ -613,7 +650,7 @@ with tab3:
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.write(f"**الأغنام:** {row['الأغنام']}")
-                    if row.get('صورة') and os.path.exists(row['صورة']):
+                    if row.get('صورة'):
                         st.image(row['صورة'], width=150)
 
                     col_btn1, col_btn2 = st.columns(2)
@@ -623,18 +660,21 @@ with tab3:
                             st.rerun()
                     with col_btn2:
                         if st.button(f"🗑️ حذف", key=f"del_btn_{row['ID']}", type="primary"):
-                            safe_delete_image(row.get('صورة'))
-                            st.session_state.history = st.session_state.history.drop(idx).reset_index(drop=True)
-                            save_data(st.session_state.history, HISTORY_FILE)
-                            show_notification("تم الحذف!", "success")
-                            st.rerun()
+                            if row.get('صورة'):
+                                delete_image_from_supabase(row['صورة'])
+                            try:
+                                supabase.table("medical_history").delete().eq("ID", row["ID"]).execute()
+                                st.session_state.history = st.session_state.history.drop(idx).reset_index(drop=True)
+                                show_notification("تم الحذف!", "success")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"خطأ في الحذف: {e}")
     else:
         st.info("لا توجد سجلات.")
-        # ─── 4. إدارة النظام ───
+# ─── 4. إدارة النظام ───
 with tab4:
     m1, m2, m3 = st.tabs(["➕ إضافة", "✏️ تعديل / صور", "💾 نسخ احتياطي"])
     
-    # ─── تبويب الإضافة ───
     with m1:
         with st.form("add"):
             c1, c2 = st.columns(2)
@@ -645,7 +685,6 @@ with tab4:
             mother = st.selectbox("الأم", [None] + st.session_state.herd["ID"].tolist(),
                                   format_func=lambda x: "بدون" if x is None else format_sheep_label(x))
             notes = st.text_area("ملاحظات", placeholder="أي ملاحظات إضافية...")
-            # دعم رفع عدة صور
             images = st.file_uploader("صور (اختياري - يمكنك اختيار عدة صور)", type=['jpg','png'], accept_multiple_files=True)
             
             if st.form_submit_button("➕ إضافة"):
@@ -658,10 +697,10 @@ with tab4:
                             st.error(f"❌ {e}")
                     else:
                         new_id = str(uuid.uuid4())
-                        # حفظ الصور المتعددة
-                        saved_images = save_multiple_images(images)
+                        # رفع الصور إلى Supabase Storage
+                        image_urls = upload_multiple_images_to_supabase(images, "sheep")
                         
-                        new_row = pd.DataFrame([{
+                        new_record = {
                             "ID": new_id,
                             "القلادة": collar,
                             "الجنس": gender,
@@ -670,35 +709,35 @@ with tab4:
                             "الأم": mother or "",
                             "الأبناء": "[]",
                             "ملاحظات": notes,
-                            "الصور": str(saved_images),
+                            "الصور": str(image_urls),
                             "اللقاحات": "[]",
                             "الجرعات": "[]",
                             "آخر تغطيس": ""
-                        }])
-                        st.session_state.herd = pd.concat([st.session_state.herd, new_row], ignore_index=True)
-                        if mother:
-                            m_idx = st.session_state.herd[st.session_state.herd["ID"] == mother].index[0]
-                            kids = safe_literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
-                            kids.append(new_id)
-                            st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
-                        save_data(st.session_state.herd, DATA_FILE)
-                        show_notification("تمت الإضافة!", "success")
-                        st.rerun()
+                        }
+                        try:
+                            supabase.table("herd").insert(new_record).execute()
+                            new_df = pd.DataFrame([new_record])
+                            st.session_state.herd = pd.concat([st.session_state.herd, new_df], ignore_index=True)
+                            if mother:
+                                m_idx = st.session_state.herd[st.session_state.herd["ID"] == mother].index[0]
+                                kids = safe_literal_eval(st.session_state.herd.at[m_idx, "الأبناء"])
+                                kids.append(new_id)
+                                st.session_state.herd.at[m_idx, "الأبناء"] = str(kids)
+                                supabase.table("herd").update({"الأبناء": str(kids)}).eq("ID", mother).execute()
+                            show_notification("تمت الإضافة!", "success")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"خطأ في الإضافة: {e}")
                 else:
                     st.error("القلادة مطلوبة")
 
-    # ─── تبويب التعديل (مع إمكانية حذف الصور) ───
     with m2:
         if not st.session_state.herd.empty:
-            # استخدام session_state لتجنب إعادة التحميل عند تغيير الاختيار
             sheep_ids = st.session_state.herd["ID"].tolist()
-            
-            # تحديد الخيار الحالي
             current_selected = st.session_state.get("selected_sheep", sheep_ids[0] if sheep_ids else None)
             if current_selected not in sheep_ids:
                 current_selected = sheep_ids[0] if sheep_ids else None
             
-            # selectbox مع on_change
             def on_sheep_change():
                 st.session_state.selected_sheep = st.session_state._sheep_select
             
@@ -716,32 +755,25 @@ with tab4:
                 row = st.session_state.herd.iloc[idx]
                 images = safe_literal_eval(row.get("الصور", "[]"))
                 
-                # عرض الصور الحالية مع زر حذف لكل صورة
+                # عرض الصور الحالية
                 if images:
                     st.write("**📸 الصور الحالية:**")
                     col_imgs = st.columns(min(len(images), 4))
-                    
-                    # استخدام session_state لتتبع الصور المراد حذفها
-                    if "images_to_delete" not in st.session_state:
-                        st.session_state.images_to_delete = []
-                    
-                    for i, img_path in enumerate(images):
-                        if os.path.exists(img_path):
-                            with col_imgs[i % 4]:
-                                st.image(img_path, width=120)
-                                if st.button(f"🗑️ حذف", key=f"del_img_{i}_{target}"):
-                                    # حذف الصورة
-                                    safe_delete_image(img_path)
-                                    # إزالة من قائمة الصور
-                                    images.pop(i)
-                                    st.session_state.herd.at[idx, "الصور"] = str(images)
-                                    save_data(st.session_state.herd, DATA_FILE)
-                                    show_notification("تم حذف الصورة!", "success")
-                                    st.rerun()
+                    for i, img_url in enumerate(images):
+                        with col_imgs[i % 4]:
+                            st.image(img_url, width=120)
+                            if st.button(f"🗑️ حذف", key=f"del_img_{i}_{target}"):
+                                delete_image_from_supabase(img_url)
+                                images.remove(img_url)
+                                st.session_state.herd.at[idx, "الصور"] = str(images)
+                                supabase.table("herd").update({"الصور": str(images)}).eq("ID", target).execute()
+                                show_notification("تم حذف الصورة!", "success")
+                                st.rerun()
+                else:
+                    st.info("📷 لا توجد صور لهذا الرأس")
                 
                 with st.form("edit"):
                     st.markdown("### ✏️ تعديل بيانات الرأس")
-                    
                     new_collar = st.text_input("القلادة*", value=row["القلادة"])
                     new_gender = st.selectbox("الجنس*", ["أنثى","أنثى صغيرة","ذكر","ذكر صغير"],
                                               index=["أنثى","أنثى صغيرة","ذكر","ذكر صغير"].index(row["الجنس"]))
@@ -759,43 +791,46 @@ with tab4:
                                               index=([None] + st.session_state.herd["ID"].tolist()).index(row.get("الأم")) if row.get("الأم") in [None] + st.session_state.herd["ID"].tolist() else 0,
                                               format_func=lambda x: "بدون" if x is None else format_sheep_label(x))
                     new_notes = st.text_area("ملاحظات", value=row.get("ملاحظات", ""))
-                    
-                    # إضافة صور جديدة (عدة صور)
                     new_images = st.file_uploader("إضافة صور جديدة", type=['jpg','png'], accept_multiple_files=True)
                     
                     if st.form_submit_button("💾 حفظ التعديلات"):
-                        # حفظ البيانات الأساسية
-                        st.session_state.herd.at[idx, "القلادة"] = new_collar
-                        st.session_state.herd.at[idx, "الجنس"] = new_gender
-                        st.session_state.herd.at[idx, "تاريخ الميلاد"] = new_birth.strftime("%Y-%m-%d") if new_birth else ""
-                        st.session_state.herd.at[idx, "عدد الولادات"] = new_births
-                        st.session_state.herd.at[idx, "الأم"] = new_mother or ""
-                        st.session_state.herd.at[idx, "ملاحظات"] = new_notes
-                        
-                        # إضافة الصور الجديدة
+                        updated_record = {
+                            "القلادة": new_collar,
+                            "الجنس": new_gender,
+                            "تاريخ الميلاد": new_birth.strftime("%Y-%m-%d") if new_birth else "",
+                            "عدد الولادات": new_births,
+                            "الأم": new_mother or "",
+                            "ملاحظات": new_notes
+                        }
                         if new_images:
                             current_images = safe_literal_eval(st.session_state.herd.at[idx, "الصور"])
-                            new_saved = save_multiple_images(new_images)
+                            new_saved = upload_multiple_images_to_supabase(new_images, "sheep")
                             current_images.extend(new_saved)
-                            st.session_state.herd.at[idx, "الصور"] = str(current_images)
+                            updated_record["الصور"] = str(current_images)
                         
-                        save_data(st.session_state.herd, DATA_FILE)
-                        show_notification("تم التحديث!", "success")
-                        st.rerun()
+                        try:
+                            supabase.table("herd").update(updated_record).eq("ID", target).execute()
+                            for key, value in updated_record.items():
+                                st.session_state.herd.at[idx, key] = value
+                            show_notification("تم التحديث!", "success")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"خطأ في التحديث: {e}")
                 
-                # زر حذف الرأس
                 if st.button("🗑️ حذف الرأس نهائياً", type="primary"):
-                    # حذف جميع الصور المرتبطة
-                    for img in images:
-                        safe_delete_image(img)
-                    st.session_state.herd = st.session_state.herd.drop(idx).reset_index(drop=True)
-                    save_data(st.session_state.herd, DATA_FILE)
-                    show_notification("تم الحذف!", "success")
-                    st.rerun()
+                    # حذف جميع الصور من Storage
+                    for img_url in images:
+                        delete_image_from_supabase(img_url)
+                    try:
+                        supabase.table("herd").delete().eq("ID", target).execute()
+                        st.session_state.herd = st.session_state.herd.drop(idx).reset_index(drop=True)
+                        show_notification("تم الحذف!", "success")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"خطأ في الحذف: {e}")
         else:
             st.info("القطيع فارغ")
 
-    # ─── تبويب النسخ الاحتياطي ───
     with m3:
         st.download_button("📥 تحميل نسخة احتياطية",
                            data=json.dumps({"herd": st.session_state.herd.to_dict(orient="records"),
@@ -807,11 +842,18 @@ with tab4:
         if uploaded and st.button("🔄 تأكيد الاستعادة", type="primary"):
             try:
                 data = json.load(uploaded)
-                st.session_state.herd = pd.DataFrame(data.get("herd", []))
-                st.session_state.history = pd.DataFrame(data.get("history", []))
-                save_data(st.session_state.herd, DATA_FILE)
-                save_data(st.session_state.history, HISTORY_FILE)
+                herd_data = data.get("herd", [])
+                history_data = data.get("history", [])
+                # حذف جميع السجلات الحالية
+                supabase.table("herd").delete().neq("ID", "00000000-0000-0000-0000-000000000000").execute()
+                supabase.table("medical_history").delete().neq("ID", "00000000-0000-0000-0000-000000000000").execute()
+                if herd_data:
+                    supabase.table("herd").insert(herd_data).execute()
+                if history_data:
+                    supabase.table("medical_history").insert(history_data).execute()
+                st.session_state.herd = pd.DataFrame(herd_data)
+                st.session_state.history = pd.DataFrame(history_data)
                 show_notification("تمت الاستعادة!", "success")
                 st.rerun()
             except Exception as e:
-                st.error(f"خطأ: {e}")
+                st.error(f"خطأ في الاستعادة: {e}")        
