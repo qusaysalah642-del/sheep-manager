@@ -69,19 +69,12 @@ def image_to_base64(image_file, max_size=(800, 800)):
     if image_file is None:
         return ""
     try:
-        # قراءة الصورة
         image_file.seek(0)
         img = Image.open(image_file)
-        
-        # ضغط الصورة
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # حفظ الصورة المضغوطة في الذاكرة
         buffer = io.BytesIO()
         img.save(buffer, format="JPEG", quality=70, optimize=True)
         image_data = buffer.getvalue()
-        
-        # تحويل إلى Base64
         encoded = base64.b64encode(image_data).decode('utf-8')
         return f"data:image/jpeg;base64,{encoded}"
     except Exception as e:
@@ -451,8 +444,8 @@ with tab1:
                         if images:
                             try:
                                 st.image(images[0], width=150)
-                            except Exception as e:
-                                st.warning(f"⚠️ لا يمكن عرض الصورة")
+                            except Exception:
+                                st.warning("⚠️ لا يمكن عرض الصورة")
                         else:
                             st.info("📷 لا توجد صورة")
                     with col_info:
@@ -591,8 +584,8 @@ with tab3:
                                 if new_selected:
                                     updated_record = {
                                         "التاريخ": str(new_date),
-                                        "الإجراء": new_action,
-                                        "العلاج": new_treatment,
+                                        "الإجراء": str(new_action),
+                                        "العلاج": str(new_treatment),
                                         "الأغنام": ", ".join([get_collar_by_id(s) for s in new_selected])
                                     }
                                     if new_img:
@@ -670,12 +663,10 @@ with tab4:
                         new_id = str(uuid.uuid4())
                         images_base64 = []
                         
-                        # ─── تحويل الصور إلى Base64 ───
                         if images:
                             st.write(f"📸 عدد الصور المرفوعة: {len(images)}")
                             for i, img in enumerate(images):
                                 st.write(f"  - الصورة {i+1}: {img.name} (حجم: {img.size} بايت)")
-                            
                             with st.spinner("⏳ جاري تحويل الصور..."):
                                 for img in images:
                                     b64 = image_to_base64(img)
@@ -687,7 +678,6 @@ with tab4:
                             st.write(f"✅ تم تحويل {len(images_base64)} صورة بنجاح")
                         else:
                             st.info("📷 لم يتم اختيار أي صور")
-                        # ─── نهاية التحويل ───
                         
                         new_record = {
                             "ID": str(new_id),
@@ -695,7 +685,7 @@ with tab4:
                             "الجنس": str(gender),
                             "تاريخ الميلاد": str(birth_str),
                             "عدد الولادات": int(births),
-                            "الأم": str(mother or ""),
+                            "الأم": str(mother if mother else ""),
                             "الأبناء": "[]",
                             "ملاحظات": str(notes),
                             "الصور": str(images_base64),
@@ -784,12 +774,13 @@ with tab4:
                     new_images = st.file_uploader("إضافة صور جديدة", type=['jpg','png'], accept_multiple_files=True)
                     
                     if st.form_submit_button("💾 حفظ التعديلات"):
+                        # ─── تحويل جميع القيم إلى الأنواع الصحيحة ───
                         updated_record = {
                             "القلادة": str(new_collar),
                             "الجنس": str(new_gender),
                             "تاريخ الميلاد": str(new_birth.strftime("%Y-%m-%d") if new_birth else ""),
                             "عدد الولادات": int(new_births),
-                            "الأم": str(new_mother or ""),
+                            "الأم": str(new_mother if new_mother else ""),
                             "ملاحظات": str(new_notes)
                         }
                         if new_images:
@@ -805,7 +796,7 @@ with tab4:
                             show_notification("تم التحديث!", "success")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"خطأ في التحديث: {e}")
+                            st.error(f"❌ خطأ في التحديث: {e}")
                 
                 if st.button("🗑️ حذف الرأس نهائياً", type="primary"):
                     try:
@@ -843,4 +834,3 @@ with tab4:
                 st.rerun()
             except Exception as e:
                 st.error(f"خطأ في الاستعادة: {e}")
-                
