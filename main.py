@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, date
 from PIL import Image
 import io
+import base64
 from supabase import create_client, Client
 
 # ─── إعداد التسجيل ──────────────────────────────────────────────────────
@@ -27,7 +28,6 @@ for key in ["success_msg", "toast", "editing_hist_id", "splash_shown", "selected
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", "sheep_images")
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     logging.info("✅ تم الاتصال بـ Supabase")
 except Exception as e:
@@ -62,75 +62,43 @@ if st.session_state.toast:
 
 os.makedirs("backups", exist_ok=True)
 
-# ─── دوال رفع الصور المحسنة ──────────────────────────────────────────
+# ─── دوال تحويل الصور إلى Base64 ──────────────────────────────────────
 
-def upload_image_to_supabase(image_file, folder="sheep"):
-    """رفع صورة إلى Supabase Storage وإرجاع الرابط العام"""
+def image_to_base64(image_file, max_size=(800, 800)):
+    """تحويل الصورة إلى نص Base64 مع ضغطها"""
     if image_file is None:
         return ""
     try:
-        # إعادة تعيين مؤشر الملف
+        # قراءة الصورة
         image_file.seek(0)
-        image_data = image_file.read()
+        img = Image.open(image_file)
         
-        # الحصول على نوع الملف
-        file_ext = image_file.name.split('.')[-1].lower()
-        if file_ext not in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']:
-            file_ext = 'jpg'
+        # ضغط الصورة
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
         
-        # اسم فريد
-        file_name = f"{folder}/{uuid.uuid4()}.{file_ext}"
+        # حفظ الصورة المضغوطة في الذاكرة
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=70, optimize=True)
+        image_data = buffer.getvalue()
         
-        # رفع الصورة
-        response = supabase.storage.from_(SUPABASE_BUCKET).upload(
-            file_name,
-            image_data,
-            {"content-type": image_file.type or "image/jpeg"}
-        )
-        
-        # الحصول على الرابط العام
-        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(file_name)
-        logging.info(f"✅ تم رفع الصورة: {public_url}")
-        return public_url
-        
+        # تحويل إلى Base64
+        encoded = base64.b64encode(image_data).decode('utf-8')
+        return f"data:image/jpeg;base64,{encoded}"
     except Exception as e:
-        st.error(f"❌ خطأ في رفع الصورة {image_file.name}: {str(e)}")
-        logging.error(f"خطأ في رفع الصورة: {e}")
+        logging.error(f"خطأ في تحويل الصورة: {e}")
         return ""
 
-def upload_multiple_images_to_supabase(image_files, folder="sheep"):
-    """رفع عدة صور مع عرض تقدم"""
-    urls = []
+def images_to_base64_list(image_files, max_size=(800, 800)):
+    """تحويل عدة صور إلى قائمة Base64"""
+    images_base64 = []
     if image_files:
-        progress_bar = st.progress(0)
-        for i, img in enumerate(image_files):
-            url = upload_image_to_supabase(img, folder)
-            if url:
-                urls.append(url)
-                st.success(f"✅ تم رفع: {img.name}")
-            else:
-                st.error(f"❌ فشل رفع: {img.name}")
-            progress_bar.progress((i + 1) / len(image_files))
-        progress_bar.empty()
-    return urls
+        for img in image_files:
+            b64 = image_to_base64(img, max_size)
+            if b64:
+                images_base64.append(b64)
+    return images_base64
 
-def delete_image_from_supabase(image_url):
-    """حذف صورة من Storage"""
-    if not image_url:
-        return
-    try:
-        parts = image_url.split('/')
-        for i, part in enumerate(parts):
-            if part == 'public':
-                if i + 2 < len(parts):
-                    file_path = '/'.join(parts[i+2:])
-                    supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
-                    logging.info(f"🗑️ تم حذف الصورة: {file_path}")
-                break
-    except Exception as e:
-        logging.error(f"خطأ في حذف الصورة: {e}")
-
-# ─── دوال أخرى ──────────────────────────────────────────────────────
+# ─── دوال مساعدة أخرى ──────────────────────────────────────────────────
 
 def safe_literal_eval(value, default=None):
     if default is None:
@@ -237,7 +205,7 @@ def show_notification(message, type="info"):
     icons = {"success": "✅", "error": "❌", "warning": "⚠️", "info": "ℹ️"}
     st.session_state.toast = f"{icons.get(type, '')} {message}"
 
-# ─── تحميل البيانات ──────────────────────────────────────────────────
+# ─── تحميل البيانات من Supabase ──────────────────────────────────────
 REQUIRED_COLS = ["ID", "القلادة", "الجنس", "تاريخ الميلاد", "عدد الولادات", "الصور", "اللقاحات", "الجرعات", "آخر تغطيس", "الأم", "الأبناء", "ملاحظات"]
 HISTORY_COLS = ["ID", "التاريخ", "الإجراء", "العلاج", "الأغنام", "صورة"]
 
@@ -484,7 +452,7 @@ with tab1:
                             try:
                                 st.image(images[0], width=150)
                             except Exception as e:
-                                st.warning(f"⚠️ لا يمكن عرض الصورة: {str(e)[:50]}")
+                                st.warning(f"⚠️ لا يمكن عرض الصورة")
                         else:
                             st.info("📷 لا توجد صورة")
                     with col_info:
@@ -513,9 +481,9 @@ with tab1:
                         if len(images) > 1:
                             st.write("**📸 صور إضافية:**")
                             cols = st.columns(min(len(images), 4))
-                            for i, img_url in enumerate(images[1:]):
+                            for i, img_data in enumerate(images[1:]):
                                 try:
-                                    cols[i % 4].image(img_url, width=100)
+                                    cols[i % 4].image(img_data, width=100)
                                 except Exception:
                                     cols[i % 4].warning("⚠️")
     else:
@@ -537,14 +505,14 @@ with tab2:
         if st.button("💾 حفظ"):
             if selected:
                 new_id = str(uuid.uuid4())
-                image_url = upload_image_to_supabase(img, "medical") if img else ""
+                image_base64 = image_to_base64(img) if img else ""
                 new_record = {
                     "ID": new_id,
                     "التاريخ": date,
                     "الإجراء": action,
                     "العلاج": treatment,
                     "الأغنام": ", ".join([get_collar_by_id(s) for s in selected]),
-                    "صورة": image_url
+                    "صورة": image_base64
                 }
                 try:
                     supabase.table("medical_history").insert(new_record).execute()
@@ -628,10 +596,7 @@ with tab3:
                                         "الأغنام": ", ".join([get_collar_by_id(s) for s in new_selected])
                                     }
                                     if new_img:
-                                        old_image = row.get("صورة")
-                                        if old_image:
-                                            delete_image_from_supabase(old_image)
-                                        updated_record["صورة"] = upload_image_to_supabase(new_img, "medical")
+                                        updated_record["صورة"] = image_to_base64(new_img)
                                     try:
                                         supabase.table("medical_history").update(updated_record).eq("ID", row["ID"]).execute()
                                         for key, value in updated_record.items():
@@ -652,7 +617,10 @@ with tab3:
                 else:
                     st.write(f"**الأغنام:** {row['الأغنام']}")
                     if row.get('صورة'):
-                        st.image(row['صورة'], width=150)
+                        try:
+                            st.image(row['صورة'], width=150)
+                        except Exception:
+                            st.warning("⚠️ لا يمكن عرض الصورة")
 
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
@@ -661,8 +629,6 @@ with tab3:
                             st.rerun()
                     with col_btn2:
                         if st.button(f"🗑️ حذف", key=f"del_btn_{row['ID']}", type="primary"):
-                            if row.get('صورة'):
-                                delete_image_from_supabase(row['صورة'])
                             try:
                                 supabase.table("medical_history").delete().eq("ID", row["ID"]).execute()
                                 st.session_state.history = st.session_state.history.drop(idx).reset_index(drop=True)
@@ -702,37 +668,37 @@ with tab4:
                             st.error(f"❌ {e}")
                     else:
                         new_id = str(uuid.uuid4())
-                        image_urls = []
+                        images_base64 = []
                         
-                        # ─── كود تصحيح رفع الصور ───
+                        # ─── تحويل الصور إلى Base64 ───
                         if images:
                             st.write(f"📸 عدد الصور المرفوعة: {len(images)}")
                             for i, img in enumerate(images):
                                 st.write(f"  - الصورة {i+1}: {img.name} (حجم: {img.size} بايت)")
                             
-                            with st.spinner("⏳ جاري رفع الصور..."):
+                            with st.spinner("⏳ جاري تحويل الصور..."):
                                 for img in images:
-                                    url = upload_image_to_supabase(img, "sheep")
-                                    if url:
-                                        image_urls.append(url)
-                                        st.success(f"✅ تم رفع: {img.name}")
+                                    b64 = image_to_base64(img)
+                                    if b64:
+                                        images_base64.append(b64)
+                                        st.success(f"✅ تم تحويل: {img.name}")
                                     else:
-                                        st.error(f"❌ فشل رفع: {img.name}")
-                            st.write(f"✅ تم رفع {len(image_urls)} صورة بنجاح")
+                                        st.error(f"❌ فشل تحويل: {img.name}")
+                            st.write(f"✅ تم تحويل {len(images_base64)} صورة بنجاح")
                         else:
                             st.info("📷 لم يتم اختيار أي صور")
-                        # ─── نهاية كود التصحيح ───
+                        # ─── نهاية التحويل ───
                         
                         new_record = {
-                            "ID": new_id,
-                            "القلادة": collar,
-                            "الجنس": gender,
-                            "تاريخ الميلاد": birth_str,
-                            "عدد الولادات": births,
-                            "الأم": mother or "",
+                            "ID": str(new_id),
+                            "القلادة": str(collar),
+                            "الجنس": str(gender),
+                            "تاريخ الميلاد": str(birth_str),
+                            "عدد الولادات": int(births),
+                            "الأم": str(mother or ""),
                             "الأبناء": "[]",
-                            "ملاحظات": notes,
-                            "الصور": str(image_urls),
+                            "ملاحظات": str(notes),
+                            "الصور": str(images_base64),
                             "اللقاحات": "[]",
                             "الجرعات": "[]",
                             "آخر تغطيس": ""
@@ -781,15 +747,14 @@ with tab4:
                 if images:
                     st.write("**📸 الصور الحالية:**")
                     col_imgs = st.columns(min(len(images), 4))
-                    for i, img_url in enumerate(images):
+                    for i, img_data in enumerate(images):
                         with col_imgs[i % 4]:
                             try:
-                                st.image(img_url, width=120)
+                                st.image(img_data, width=120)
                             except Exception:
                                 st.warning("⚠️")
                             if st.button(f"🗑️ حذف", key=f"del_img_{i}_{target}"):
-                                delete_image_from_supabase(img_url)
-                                images.remove(img_url)
+                                images.remove(img_data)
                                 st.session_state.herd.at[idx, "الصور"] = str(images)
                                 supabase.table("herd").update({"الصور": str(images)}).eq("ID", target).execute()
                                 show_notification("تم حذف الصورة!", "success")
@@ -820,17 +785,17 @@ with tab4:
                     
                     if st.form_submit_button("💾 حفظ التعديلات"):
                         updated_record = {
-                            "القلادة": new_collar,
-                            "الجنس": new_gender,
-                            "تاريخ الميلاد": new_birth.strftime("%Y-%m-%d") if new_birth else "",
-                            "عدد الولادات": new_births,
-                            "الأم": new_mother or "",
-                            "ملاحظات": new_notes
+                            "القلادة": str(new_collar),
+                            "الجنس": str(new_gender),
+                            "تاريخ الميلاد": str(new_birth.strftime("%Y-%m-%d") if new_birth else ""),
+                            "عدد الولادات": int(new_births),
+                            "الأم": str(new_mother or ""),
+                            "ملاحظات": str(new_notes)
                         }
                         if new_images:
                             current_images = safe_literal_eval(st.session_state.herd.at[idx, "الصور"])
-                            new_saved = upload_multiple_images_to_supabase(new_images, "sheep")
-                            current_images.extend(new_saved)
+                            new_base64 = images_to_base64_list(new_images)
+                            current_images.extend(new_base64)
                             updated_record["الصور"] = str(current_images)
                         
                         try:
@@ -843,8 +808,6 @@ with tab4:
                             st.error(f"خطأ في التحديث: {e}")
                 
                 if st.button("🗑️ حذف الرأس نهائياً", type="primary"):
-                    for img_url in images:
-                        delete_image_from_supabase(img_url)
                     try:
                         supabase.table("herd").delete().eq("ID", target).execute()
                         st.session_state.herd = st.session_state.herd.drop(idx).reset_index(drop=True)
