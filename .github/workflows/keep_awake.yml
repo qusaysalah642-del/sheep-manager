@@ -1,0 +1,16 @@
+name: Keep App Awake
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: |
+          curl -s https://ylmlpuc57dnzqhfra.streamlit.app > /dev/null
+          echo "تمت زيارة التطبيق بنجاح لإبقائه متيقظاً!"
+          
